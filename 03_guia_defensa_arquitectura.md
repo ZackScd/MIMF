@@ -27,6 +27,7 @@ Definir el modelo de almacenamiento y acceso a los datos a nivel nacional, balan
 La centralización total tiene un costo prohibitivo, plazos inviables y alta fricción política. La federación pura tiende al caos sin un control central. El modelo híbrido reduce la fricción operativa al no forzar migraciones masivas, pero unifica la información crítica vital, logrando un equilibrio pragmático.
 
 #### Sacrificio (Trade-off)
+
 Incrementa la complejidad del diseño arquitectónico, exige una gobernanza técnica central muy fuerte y no garantiza consistencia absoluta ni latencia mínima para la consulta de historiales profundos antiguos.
 
 ---
@@ -46,11 +47,11 @@ Integrar sistemas *legacy* cerrados y heterogéneos sin modificar su código fue
 *   **Enterprise Service Bus (ESB)** clásico.
 *   **Patrón Sidecar / Appliance gestionado (Opción elegida).**
 
-#### Decisión y Beneficios (Sidecar)
+#### Decisión y Beneficios (Sidecar con conectores modulares)
 Permite la integración sin intervenir el código fuente del sistema legacy. Desacopla la lógica de negocio (hospital) de la lógica de plataforma (red nacional). Es modular y menos invasivo que una refactorización completa o un ESB monolítico.
 
 #### Sacrificio (Trade-off)
-Aumenta la superficie de componentes desplegados en la red. Incorpora complejidad a la operación de TI de los hospitales y requiere mecanismos robustos para monitoreo y actualizaciones seguras (Over-The-Air).
+Aumenta la superficie de componentes desplegados. Requiere mecanismos robustos para monitoreo y actualizaciones OTA. El concepto de "caja negra universal" es una simplificación; en la práctica, exige el desarrollo y mantenimiento de una librería de conectores específicos para las distintas familias de EHR del mercado, transformándose en una solución de "producto + consultoría" en lugar de un simple ejecutable.
 
 ---
 
@@ -69,10 +70,10 @@ Establecer una topología de red que funcione en el mundo real, superando las ba
 *   **Bus de eventos asíncrono** (ej. Kafka).
 
 #### Decisión y Beneficios (Hub-and-Spoke con Relay)
-Un modelo P2P puro es operativamente inviable en redes corporativas de salud. La arquitectura basada en Relay facilita una conectividad bidireccional estable mediante conexiones TCP persistentes de salida, sin exigir a los equipos de TI locales la apertura de puertos de entrada.
+Un modelo P2P puro es operativamente inviable en redes corporativas de salud. La arquitectura basada en Relay facilita una conectividad estable mediante conexiones TCP de salida, sin exigir a los equipos de TI locales la apertura de puertos de entrada.
 
 #### Sacrificio (Trade-off)
-Genera una dependencia hacia una infraestructura de red intermedia. El Relay puede convertirse en un cuello de botella si no está diseñado para Alta Disponibilidad (HA), exigiendo SLAs muy estrictos.
+Genera una dependencia hacia una infraestructura de red intermedia. El Relay puede convertirse en un cuello de botella si no está diseñado para escalabilidad horizontal y balanceo de carga regional, exigiendo no solo SLAs estrictos sino también una arquitectura distribuida propia.
 
 ---
 
@@ -94,7 +95,7 @@ Elegir un protocolo de comunicación para la red interna de microservicios que s
 Ofrece un menor *overhead* de red gracias a HTTP/2 y serialización binaria. Maximiza el rendimiento y disminuye la latencia, factor crítico en zonas con ancho de banda restringido. REST se mantiene como opción viable solo para APIs públicas o integraciones simples.
 
 #### Sacrificio (Trade-off)
-Se sacrifica la legibilidad humana directa de los *payloads* (a diferencia de JSON). Requiere mayor disciplina para el manejo de los contratos (`.proto`) y representa una curva de aprendizaje más pronunciada.
+Se sacrifica la legibilidad humana directa de los *payloads*. Requiere mayor disciplina en el manejo de contratos (`.proto`) y presenta una curva de aprendizaje más pronunciada. Además, introduce un riesgo de incompatibilidad con infraestructura de red legacy (proxies, firewalls) que no soporten correctamente HTTP/2, pudiendo requerir fallbacks (ej. gRPC-Web).
 
 ---
 
@@ -182,7 +183,7 @@ Acceder a los datos de los sistemas *legacy* sin afectar su rendimiento ni estab
 Protege la base de datos antigua al desacoplar la carga de lectura. Acelera los tiempos de respuesta al tener los datos pre-transformados a formato FHIR. Se descarta la consulta directa por el riesgo crítico de saturar y botar los sistemas que operan el hospital.
 
 #### Sacrificio (Trade-off)
-Los datos en el *staging* presentan un desfase temporal. Exige categorizar qué datos (como el RVN) justifican una sincronización en "near real-time" y cuáles (historial antiguo) pueden usar procesos batch nocturnos.
+Los datos en el *staging* presentan un desfase temporal. Este riesgo se mitiga, pero no se elimina, mediante una estrategia de sincronización híbrida (near-real time para datos vitales, batch para el resto). Una falla en el ETL de datos críticos podría llevar a decisiones clínicas basadas en información incompleta.
 
 ---
 
@@ -202,7 +203,7 @@ Garantizar que el acceso a la información del paciente cumpla con la ley de pro
 En salud, el rol "Médico" es insuficiente. ABAC evalúa el contexto: ¿el profesional está de turno?, ¿tiene una cita con el paciente? Esto bloquea accesos no autorizados y cumple estrictamente con la ley de privacidad.
 
 #### Sacrificio (Trade-off)
-Incrementa la complejidad. Depende de la disponibilidad de sistemas periféricos (agendas, admisión) para obtener los atributos en tiempo real.
+Incrementa la complejidad y depende críticamente de la disponibilidad y calidad de los sistemas periféricos (agendas, admisión) para obtener los atributos. Una falla en estas fuentes puede generar denegaciones de acceso legítimas, fomentando un abuso del protocolo Break-Glass como "solución" informal y degradando el modelo de seguridad.
 
 ---
 
@@ -241,8 +242,8 @@ Proteger la identidad de los pacientes en el Índice Nacional de Descubrimiento,
 *   Aplicación de **Hash con Salt criptográfico (Opción elegida).**
 *   **Plataformas de Tokenización centralizada.**
 
-#### Decisión y Beneficios (Hash + Salt)
-Minimiza la superficie de ataque. Ante una vulneración del Índice, los identificadores no son directamente legibles, limitando la reidentificación masiva. El Índice puede enrutar sin necesidad de conocer el RUT original.
+#### Decisión y Beneficios (HMAC con clave secreta)
+Se opta por un **HMAC (Hash-based Message Authentication Code)** en lugar de un simple hash+salt. Esto minimiza la superficie de ataque y, al depender de una clave secreta (gestionada en un KMS y rotada periódicamente), mitiga significativamente el riesgo de ataques de fuerza bruta o de diccionario contra el universo conocido de RUTs, incluso si el código del sistema se filtra.
 
 #### Sacrificio (Trade-off)
 La irreversibilidad del hash elimina la capacidad del sistema central para recuperar el dato. Implica una gestión robusta y segura del 'salt' (vía un KMS).
@@ -306,10 +307,10 @@ Garantizar que los componentes centrales del sistema (Índice y RVN) no sean un 
 *   Arquitectura de **Replicación Activa-Activa / Multi-Región (Opción elegida).**
 
 #### Decisión y Beneficios (Replicación Multi-Región)
-Para una infraestructura crítica nacional, un SPOF es inaceptable. La replicación geográfica garantiza máxima tolerancia a fallos catastróficos, manteniendo el servicio operativo.
+Para una infraestructura crítica nacional, un SPOF es inaceptable. La replicación geográfica garantiza máxima tolerancia a fallos, manteniendo el servicio operativo.
 
 #### Sacrificio (Trade-off)
-Eleva exponencialmente los costos de infraestructura (CapEx y OpEx). Introduce una alta complejidad técnica para mantener la consistencia de datos a través de múltiples zonas geográficas.
+Eleva exponencialmente los costos (CapEx/OpEx) y la complejidad técnica. Aún con esta arquitectura, una falla catastrófica simultánea en todas las regiones puede degradar temporalmente la capacidad de *descubrimiento nacional* hasta que el servicio se restaure, aunque la operación local de cada hospital permanezca intacta.
 
 ---
 
@@ -331,7 +332,7 @@ Permitir que paramédicos accedan a información vital offline en emergencias, g
 Implementa una arquitectura de memoria de doble zona (NDEF). La zona pública instruye al civil sobre el padecimiento específico (ganando minutos vitales). La zona privada usa Protobuf para encajar todo el RVN clínico en <500 bytes. Además, la aplicación de lectura extiende el ABAC: restringe la lectura privada solo a paramédicos en turno activo, forzando un Break-Glass auditable si intervienen estando fuera de servicio.
 
 #### Sacrificio (Trade-off)
-La zona pública expone intencionalmente la condición del paciente, requiriendo su consentimiento explícito previo. La información en el chip puede quedar desactualizada (mitigado por el "semáforo de frescura" 🟢🟡🔴 en la App). Además, no asume cobertura universal: ante pacientes turistas o no enrolados, el sistema hace un *fallback* directo al protocolo pre-hospitalario a ciegas tradicional, asegurando que el chip sea un acelerador de la atención, pero nunca un bloqueador.
+La zona pública expone intencionalmente la condición del paciente, requiriendo su consentimiento explícito previo. La información en el chip puede quedar desactualizada; el "semáforo de frescura" 🟢🟡🔴 mitiga esto, pero no elimina el riesgo de que un dato reciente sea incorrecto, creando una potencial falsa confianza. El sistema no asume cobertura universal y hace *fallback* al protocolo tradicional, asegurando que el chip sea un acelerador, no un bloqueador.
 
 ---
 

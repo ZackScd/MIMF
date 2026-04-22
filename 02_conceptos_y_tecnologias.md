@@ -58,8 +58,8 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 ### A) Índice Híbrido Centralizado (Modelo X-Road)
 
 *   **Rama / Concepto:** Sistemas Distribuidos / Motores de Búsqueda y Enrutamiento.
-*   **¿Qué es?:** Un directorio nacional. No guarda la ficha, solo metadata: `hash(RUT+salt) -> ¿En qué hospital(es) hay datos?`
-*   **Profundización:** A diferencia de una red P2P pura (como un torrent) donde la búsqueda es lenta, el índice central ofrece enrutamiento determinístico pero es inherentemente "stateless-ish" (su estado es reconstruible consultando a los nodos). No guarda datos clínicos. Para evitar ser un SPOF, usa replicación multi-región y caché distribuido en Sidecars. Una falla de red centralizada no significa una caída clínica local.
+*   **¿Qué es?:** Un directorio nacional. No guarda la ficha, solo metadata: `HMAC(RUT, clave_secreta) -> ¿En qué hospital(es) hay datos?`
+*   **Profundización:** A diferencia de una red P2P pura (como un torrent) donde la búsqueda es lenta, el índice central ofrece enrutamiento determinístico pero es inherentemente "stateless-ish" (su estado es reconstruible consultando a los nodos). No guarda datos clínicos. Para evitar ser un SPOF, usa replicación multi-región y caché distribuido en Sidecars. Aunque una falla catastrófica del índice puede degradar temporalmente el *descubrimiento* nacional, no afecta la operación local. Para proteger la identidad, en lugar de un simple hash con salt, se utiliza un HMAC con una clave secreta rotativa gestionada por un KMS, mitigando ataques de fuerza bruta contra el universo predecible de RUTs.
 *   **Justificación:** La consistencia eventual es inaceptable en salud. El índice central garantiza respuestas predecibles.
 *   **Alternativas descartadas:**
     *   *DHT Pura (Kademlia):* Descartada. La latencia de búsqueda impredecible y las "rutas rotas" por nodos inestables lo hacen inviable para escenarios críticos.
@@ -68,7 +68,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Redes / Protocolos de Comunicación RPC.
 *   **¿Qué es?:** gRPC es un framework RPC (Remote Procedure Call) de Google. Usa HTTP/2 y Protocol Buffers (binarios) en lugar de JSON para enviar datos.
-*   **Profundización:** Al usar binarios en lugar de texto plano, el payload (peso del mensaje) se reduce drásticamente. Además, HTTP/2 permite multiplexar múltiples peticiones en una sola conexión TCP, reduciendo la latencia de "handshake".
+*   **Profundización:** Al usar binarios en lugar de texto plano, el payload (peso del mensaje) se reduce drásticamente. Además, HTTP/2 permite multiplexar múltiples peticiones en una sola conexión TCP, reduciendo la latencia de "handshake". Se debe considerar que algunas redes hospitalarias antiguas con proxies o firewalls restrictivos pueden presentar problemas con HTTP/2; para estos casos, la arquitectura debe contemplar un mecanismo de fallback como gRPC-Web (que encapsula sobre HTTP/1.1) o una API REST equivalente para garantizar la conectividad.
 *   **Justificación:** Ofrece menor overhead de red. **Habilitador Crítico NFC:** Además, la altísima compresión de Protobuf es la única tecnología que permite empaquetar un historial vital estructurado dentro de los 888 bytes de memoria de un chip NFC básico, algo que con JSON/texto plano requeriría 3 a 5 veces más espacio.
 *   **Alternativas descartadas:**
     *   *API REST (con JSON):* Descartada para la comunicación interna de red por el alto peso de los payloads (texto plano) y la lentitud al serializar/deserializar grandes volúmenes de datos clínicos en comparación con binarios.
@@ -77,6 +77,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Topología de Red.
 *   **¿Qué es?:** Comunicación enrutada a través de un servidor central de mensajería (Relay) o conexiones TCP persistentes salientes desde los hospitales.
+*   **Profundización:** Para evitar que el Relay se convierta en un cuello de botella de rendimiento o un SPOF, su diseño debe ser inherentemente distribuido y escalable horizontalmente, utilizando balanceadores de carga y despliegues multi-región para distribuir el tráfico y garantizar alta disponibilidad.
 *   **Justificación:** En la salud pública real, los hospitales están detrás de NATs simétricos y firewalls rígidos. Un modelo P2P puro es operativamente irrealizable. Usar un Relay/Hub manejado facilita el paso a través de redes seguras sin pedir a los hospitales que abran puertos de entrada.
 
 ---
@@ -105,8 +106,8 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 ### C) ETL Asíncrono y Área de Staging
 
 *   **Rama / Concepto:** Ingeniería de Datos / Procesamiento Batch.
-*   **¿Qué es?:** Extraer (E), Transformar (T) y Cargar (L) datos desde la base legacy hacia una base temporal ultrarrápida (Staging) en formato FHIR.
-*   **Profundización:** Utiliza un enfoque híbrido: sincronización "near real-time" (vía eventos) para el RVN, y procesos Batch nocturnos para el historial antiguo. Para evitar la sobreingeniería y el fracaso temprano, el diseño prioriza la simplicidad operativa en fases iniciales (comenzando exclusivamente con Batch) e introduce la complejidad del "near real-time" solo en fases maduras del proyecto.
+*   **¿Qué es?:** Extraer (E), Transformar (T) y Cargar (L) datos desde la base legacy hacia una base temporal ultrarrápida (Staging) en formato FHIR. El riesgo de inconsistencia temporal (datos obsoletos) se mitiga con una estrategia de sincronización diferenciada.
+*   **Profundización:** Utiliza un enfoque híbrido: sincronización "near real-time" (vía eventos o micro-batches de minutos) para datos críticos del RVN (ej. nuevas alergias), y procesos Batch nocturnos para el historial profundo. Esta separación es clave para balancear consistencia y rendimiento, asegurando que la información vital esté actualizada sin sobrecargar los sistemas legacy con consultas constantes.
 *   **Justificación (Hardware-Awareness):** Si consultas directamente una base de datos Oracle del año 2008 en medio de una urgencia, la botas. El staging protege la base antigua y garantiza lecturas instantáneas.
 
 ---
@@ -141,7 +142,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Ciberseguridad / Gestión de Identidad y Accesos (IAM).
 *   **¿Qué es?:** Control de acceso que no solo evalúa "quién eres" (Rol: Médico), sino el "contexto" (Atributo: ¿Estás de turno? ¿Este paciente tiene cita hoy contigo?).
-*   **Profundización:** Supera al clásico RBAC (Roles) evaluando dinámicamente políticas basadas en Sujeto, Recurso, Acción y Entorno. En la práctica, requiere integración con los sistemas locales de agenda/admisión para obtener los atributos en tiempo real (ej. ¿está de turno?, ¿el paciente ingresó hoy?). Ante la falta de atributos, aplica un fallback conservador "Deny by Default" (denegar por defecto), obligando a usar el protocolo Break-Glass en caso de urgencia real.
+*   **Profundización:** Supera al clásico RBAC (Roles) evaluando dinámicamente políticas basadas en Sujeto, Recurso, Acción y Entorno. En la práctica, requiere integración con los sistemas locales de agenda/admisión para obtener los atributos en tiempo real (ej. ¿está de turno?, ¿el paciente ingresó hoy?). Ante la falta de atributos, aplica un fallback conservador "Deny by Default", obligando a usar el protocolo Break-Glass. El principal riesgo operacional es la dependencia de la calidad y disponibilidad de estas fuentes de atributos; si fallan, se corre el riesgo de un aumento en denegaciones incorrectas y un abuso del protocolo Break-Glass como solución informal, convirtiendo una medida de seguridad en una puerta trasera.
 *   **Justificación:** Cumplimiento estricto de la Ley 19.628 (Protección de Datos). Bloquea accesos de personal médico curioso a fichas de famosos o familiares.
 *   **Alternativas descartadas:**
     *   *RBAC puro (Control por Roles):* Descartado. RBAC dice "todos los médicos pueden ver todo". En salud, eso es una violación de privacidad; el médico solo debe ver la ficha de *sus pacientes actuales*.
@@ -157,7 +158,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Ciberseguridad / Auditoría, Compliance y Análisis Forense.
 *   **¿Qué es?:** Una base de datos (o archivo) donde solo se pueden "agregar" (append) eventos. No permite UPDATE ni DELETE. Además, lleva un sello de tiempo y firma criptográfica.
-*   **Profundización:** Concepto WORM (Write Once, Read Many). Usa hashing criptográfico (como el árbol de Merkle) para asegurar que si un administrador de bases de datos borra un registro, la cadena completa se invalida, detectando el fraude de inmediato.
+*   **Profundización:** Concepto WORM (Write Once, Read Many). Usa hashing criptográfico (como el árbol de Merkle) para asegurar que si un administrador de bases de datos borra un registro, la cadena completa se invalida. Dado el volumen masivo de eventos, se debe implementar una estrategia de ciclo de vida de datos que contemple el archivado en almacenamiento de bajo costo (cold storage) y sistemas de indexación eficientes para permitir búsquedas forenses sin degradar el rendimiento.
 *   **Justificación:** Trazabilidad legal. Si hay una demanda por negligencia o filtración (Ley 21.668), el Ministerio de Salud necesita pruebas irrefutables de quién vio qué.
 *   **Alternativas descartadas:**
     *   *Blockchain / Smart Contracts:* Descartado rotundamente por vender humo. Introduce latencia, altos costos computacionales de consenso y complejidad innecesaria para un entorno donde el Estado ya actúa como entidad central de confianza.
@@ -175,7 +176,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
     1. **Cifrado Semántico:** La Zona Privada usa SNOMED CT (números incomprensibles sin la base de datos oficial).
     2. **Firma Criptográfica:** El Protobuf está firmado (PKI) por el RVN Central para invalidar chips adulterados.
     3. **ABAC en App Móvil:** La lectura de la Zona Privada exige que el paramédico autenticado esté **de turno activo** en el sistema. Si está fuera de turno, la lectura se bloquea para evitar espionaje.
-    4. **Break-Glass Móvil:** Si un médico fuera de turno interviene en un accidente real, puede forzar la lectura activando el Break-Glass en la App, lo que graba la ubicación GPS, usuario y motivo en el log inmutable (WORM) para auditoría forense.
+    4. **Break-Glass Móvil:** Si un médico fuera de turno interviene en un accidente real, puede forzar la lectura activando el Break-Glass en la App. La auditoría de este evento (GPS, usuario, motivo) se almacena de forma segura en el dispositivo móvil y se sincroniza con el servidor central en cuanto recupera la conectividad, garantizando la trazabilidad incluso en escenarios offline.
 
 ---
 
@@ -205,7 +206,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Alternativas descartadas para el Sidecar:** Java, Python, Node.js.
     *   Requieren instalar runtimes pesados (JVM, V8). Muchos servidores de hospitales rurales corren Windows Server 2008 con 2GB de RAM; no soportan una máquina virtual Java.
 *   **Lenguaje del Índice Central / Frontend API:** Node.js (TypeScript) o Go.
-*   **Base de Datos del Índice:** Redis (por su velocidad en memoria de lectura de Hashes).
+*   **Base de Datos del Índice:** Redis (como capa de caché de alto rendimiento) respaldado por una base de datos persistente (ej. PostgreSQL) como fuente de verdad para la recuperación ante desastres.
 *   **Cache Local:** Redis o SQLite en memoria.
 *   **Log Inmutable:** PostgreSQL (con restricciones de permisos a nivel base de datos) o una base optimizada para Time-Series.
 
