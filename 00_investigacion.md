@@ -36,6 +36,7 @@ Las naciones líderes abandonaron la idea de forzar un "software único" y se en
 ### A. El Modelo de Israel (Interoperabilidad Forzada Centralizada)
 * **La Solución:** Centralización de un repositorio con "datos clave" (resumen clínico, alergias, últimas hospitalizaciones).
 * **Resultado:** Ante cualquier atención de urgencia a nivel nacional, el sistema rescata automáticamente este "resumen vital" del paciente.
+* **La debilidad (El Gap Offline):** Este modelo depende 100% de la conexión a internet. Si un paciente sufre un accidente en una zona rural o catastrófica sin señal, el paramédico no tiene cómo acceder a su información vital.
 
 ### B. El Modelo de Estonia: X-Road (Referente Mundial Distribuido)
 Estonia no utiliza un software único, sino una arquitectura distribuida (*Distributed by Design*) llamada **X-Road**, una Capa de Intercambio de Datos (Data Exchange Layer).
@@ -82,6 +83,7 @@ La propuesta arquitectónica de la **Malla de Interoperabilidad Médica Federada
 **Ventajas Críticas de la Arquitectura MIMF:**
 1. **Interoperabilidad Semántica (SNOMED CT / LOINC):** Resuelve el problema de que una simple conexión de red no garantiza entendimiento médico. Asegura que el significado clínico de un "Infarto" sea universal en todo Chile, complementando la sintaxis de FHIR.
 2. **Soberanía y Protección de Datos:** Al ser un diseño federado puro para el historial profundo, preserva la autoría inmutable en el hospital de origen. Esto es inherentemente más robusto y defendible ante la **Ley de Protección de Datos (19.628)** en comparación a un "mega repositorio" centralizado susceptible a vulneraciones masivas.
+3. **Continuidad Pre-Hospitalaria (Offline-First en terreno):** A diferencia de las visiones estatales puramente de "nube", MIMF incorpora el uso de **Chips NFC (Tokens Físicos)** para paramédicos, permitiendo que la información vital esté disponible de forma instantánea en accidentes vehiculares o zonas rurales sin internet, pre-alertando a los hospitales antes de que el paciente ingrese por urgencias.
 
 **Conclusión:**
-El Estado chileno está fijando las reglas normativas, pero aún carece de la infraestructura operativa que materialice la ley en terreno. La "caja negra" perimetral (Sidecar) propuesta en MIMF representa la pieza faltante en el puzzle nacional: un mecanismo para integrar de forma barata, rápida y segura la heterogeneidad de los hospitales rurales y urbanos a la carretera digital del país.
+El Estado chileno está fijando las reglas normativas, pero aún carece de la infraestructura operativa que materialice la ley en terreno. La "caja negra" perimetral (Sidecar) propuesta en MIMF, combinada con la identidad física portátil (NFC), representa la pieza faltante en el puzzle nacional: la información médica crítica viaja con el paciente, ya sea digitalmente entre instituciones o físicamente en su bolsillo para escenarios de emergencia extrema.

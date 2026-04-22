@@ -7,6 +7,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   No reemplaza los sistemas (EHR) existentes en los hospitales.
 *   No unifica todo el historial clínico profundo en una base de datos central.
 *   No resuelve automáticamente la calidad semántica del dato; si el nodo de origen no realiza un mapeo local correcto, el sistema no lo adivina.
+*   El Token Físico (NFC) NO reemplaza el sistema de red, es estrictamente una caché física offline de último recurso.
 
 ---
 
@@ -43,6 +44,13 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **¿Qué es?:** Definición de reglas para resolver conflictos cuando dos hospitales tienen datos divergentes sobre un mismo paciente.
 *   **Justificación:** En un modelo federado, el hospital que generó el registro es el dueño legal y mantiene la autoría inmutable del dato (fuente de verdad). La política explícita del sistema es: ciertos tipos de datos tienen prioridad fija (ej. Alergias Críticas > Diagnósticos Históricos), el sistema expone visualmente el conflicto y su versión (timestamp) sin sobreescribir ni borrar nada, y delega la resolución final al profesional en su contexto clínico actual.
 
+### E) Identidad Médica Físicamente Distribuida (NFC)
+
+*   **Rama / Concepto:** Computación Ubicua / Dispositivos Edge.
+*   **¿Qué es?:** El Token Físico de Identidad Médica (TPIM). Un chip NFC (NTAG216) portado por el paciente que actúa como el "nodo" más pequeño y externo de la red.
+*   **Profundización:** Utiliza un sistema de **Doble Registro NDEF**. El Registro 1 es público (texto plano con instrucciones de primeros auxilios como "Epilepsia: poner de lado") y el Registro 2 es privado (Protobuf con un **subconjunto ultracrítico del RVN** comprimido, ej. alergias severas y grupo sanguíneo). Su emisión es gestionada centralmente (vía CESFAM/Clave Única). El chip se reescribe en dos instancias: (A) **Actualización activa**, cuando el paciente sale de una consulta en un establecimiento conectado a la MIMF, el Sidecar ofrece sincronizar el chip acercándolo a un lector del mesón; (B) **Actualización pasiva** mediante kioscos de autoatención en CESFAM y farmacias de la red pública. Para mitigar el riesgo de datos obsoletos, la App paramédica lee la fecha del chip y aplica un semáforo de frescura visual (🟢 < 30 días, 🟡 30-90 días, 🔴 > 90 días).
+*   **Justificación:** Protege al paciente en las dos fases de la emergencia (civil y profesional). El modelo de emisión institucional resuelve la viabilidad de distribución, y el semáforo visual transfiere la decisión de confianza en el dato offline al criterio clínico del paramédico.
+
 ---
 
 ## 2. Stack de Red y Descubrimiento
@@ -61,7 +69,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Rama / Concepto:** Redes / Protocolos de Comunicación RPC.
 *   **¿Qué es?:** gRPC es un framework RPC (Remote Procedure Call) de Google. Usa HTTP/2 y Protocol Buffers (binarios) en lugar de JSON para enviar datos.
 *   **Profundización:** Al usar binarios en lugar de texto plano, el payload (peso del mensaje) se reduce drásticamente. Además, HTTP/2 permite multiplexar múltiples peticiones en una sola conexión TCP, reduciendo la latencia de "handshake".
-*   **Justificación:** Ofrece menor overhead de red, hace un mejor uso de conexiones persistentes y garantiza alta eficiencia en entornos de bajo ancho de banda, haciéndolo infinitamente más defendible que una API REST estándar.
+*   **Justificación:** Ofrece menor overhead de red. **Habilitador Crítico NFC:** Además, la altísima compresión de Protobuf es la única tecnología que permite empaquetar un historial vital estructurado dentro de los 888 bytes de memoria de un chip NFC básico, algo que con JSON/texto plano requeriría 3 a 5 veces más espacio.
 *   **Alternativas descartadas:**
     *   *API REST (con JSON):* Descartada para la comunicación interna de red por el alto peso de los payloads (texto plano) y la lentitud al serializar/deserializar grandes volúmenes de datos clínicos en comparación con binarios.
 
@@ -159,6 +167,16 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Rama / Concepto:** Ciberseguridad / Criptografía.
 *   **¿Qué es?:** En lugar de prometer un E2EE (Cifrado Extremo a Extremo) irrealizable en este ecosistema, se implementa cifrado en tránsito estricto (TLS 1.3) entre los nodos y el hub central, y cifrado en reposo para cachés y áreas de staging locales.
 
+### E) Seguridad en Terreno (TPIM / NFC)
+
+*   **Rama / Concepto:** Seguridad Física e Integridad de Dispositivos Periféricos.
+*   **¿Qué es?:** Mecanismos para evitar clonación, alteración o lectura maliciosa de los chips de pacientes.
+*   **Profundización:** 
+    1. **Cifrado Semántico:** La Zona Privada usa SNOMED CT (números incomprensibles sin la base de datos oficial).
+    2. **Firma Criptográfica:** El Protobuf está firmado (PKI) por el RVN Central para invalidar chips adulterados.
+    3. **ABAC en App Móvil:** La lectura de la Zona Privada exige que el paramédico autenticado esté **de turno activo** en el sistema. Si está fuera de turno, la lectura se bloquea para evitar espionaje.
+    4. **Break-Glass Móvil:** Si un médico fuera de turno interviene en un accidente real, puede forzar la lectura activando el Break-Glass en la App, lo que graba la ubicación GPS, usuario y motivo en el log inmutable (WORM) para auditoría forense.
+
 ---
 
 ## 6. Gobernanza, Estrategia Política y de Adopción
@@ -236,6 +254,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Soft Merge (Datos Reconciliados):** Enfoque que muestra versiones conflictivas de un diagnóstico (con fechas y orígenes) para que el médico decida, sin borrar registros ajenos.
 *   **SPOF (Single Point of Failure):** Punto Único de Fallo. Componente que, de caer, apaga toda la red. La MIMF lo evita replicando el Índice y usando cachés de emergencia.
 *   **TLS 1.3:** Protocolo criptográfico de transporte que cifra de manera robusta los datos médicos mientras viajan por internet ("cifrado en tránsito").
+*   **TPIM (Token Físico de Identidad Médica):** Componente NFC de la MIMF portado por el paciente. Almacena offline un resumen vital codificado en Protobuf para emergencias de primeros respondedores.
 *   **TTL (Time To Live):** Tiempo de vida útil de un dato almacenado en el caché antes de forzar al sistema a ir a buscar la versión más nueva al hospital de origen.
 *   **Vendor Lock-in (Cautividad):** Cuando una empresa o Estado queda atrapado con un solo proveedor de software porque el costo y formato de extracción de datos hace inviable migrar.
 *   **WORM (Write Once, Read Many) / Log Inmutable:** Base de datos de auditoría temporal donde los accesos se registran como bloques añadidos al final, impidiendo alteraciones forenses.

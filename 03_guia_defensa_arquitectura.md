@@ -313,6 +313,28 @@ Eleva exponencialmente los costos de infraestructura (CapEx y OpEx). Introduce u
 
 ---
 
+## 15. Chip NFC (TPIM) vs. Acceso Puramente en la Nube
+
+#### Conceptos a Estudiar
+Computación Offline-first, Estructuras de datos binarias (Protobuf memory footprint), Firmas digitales asimétricas (PKI), Capacidades NFC (NTAG216).
+
+#### Problema a Resolver
+Permitir que paramédicos accedan a información vital offline en emergencias, guiando además a los civiles presentes sobre cómo actuar (ej. ataque de epilepsia), garantizando al mismo tiempo que el personal médico no pueda abusar del sistema leyendo chips arbitrariamente fuera de turno.
+
+#### Alternativas
+*   **Modelo Israelí 100% Online:** Depender exclusivamente del RUT dictado por un familiar conectado a la nube central.
+*   **Código QR con enlace web:** Impreso en carnet (Inútil sin señal de internet).
+*   **Biometría móvil:** Lectura de huella por paramédicos conectada a base central (Alto costo de hardware y requiere internet).
+*   **Token Físico NFC (TPIM) con RVN comprimido en Protobuf (Opción elegida).**
+
+#### Decisión y Beneficios (TPIM NFC)
+Implementa una arquitectura de memoria de doble zona (NDEF). La zona pública instruye al civil sobre el padecimiento específico (ganando minutos vitales). La zona privada usa Protobuf para encajar todo el RVN clínico en <500 bytes. Además, la aplicación de lectura extiende el ABAC: restringe la lectura privada solo a paramédicos en turno activo, forzando un Break-Glass auditable si intervienen estando fuera de servicio.
+
+#### Sacrificio (Trade-off)
+La zona pública expone intencionalmente la condición del paciente, requiriendo su consentimiento explícito previo. La información en el chip puede quedar desactualizada (mitigado por el "semáforo de frescura" 🟢🟡🔴 en la App). Además, no asume cobertura universal: ante pacientes turistas o no enrolados, el sistema hace un *fallback* directo al protocolo pre-hospitalario a ciegas tradicional, asegurando que el chip sea un acelerador de la atención, pero nunca un bloqueador.
+
+---
+
 ## Orden de Estudio y Preparación de Defensa
 
 1.  **Fundamentos:** Arquitectura distribuida e híbrida federada.
@@ -322,3 +344,4 @@ Eleva exponencialmente los costos de infraestructura (CapEx y OpEx). Introduce u
 5.  **Optimización legacy:** Operaciones ETL y almacenamiento Staging.
 6.  **Ciberseguridad clínica:** Modelos ABAC, protocolo Break-glass y Hashing.
 7.  **Resiliencia operativa:** Implementación de Cache, Circuit Breaker y mitigación de SPOF.
+8.  **Edge / Pre-Hospitalario:** Protocolos NFC, compresión binaria extrema y seguridad de TPIM offline.
