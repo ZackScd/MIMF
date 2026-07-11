@@ -92,10 +92,10 @@ Elegir un protocolo de comunicación para la red interna de microservicios que s
 *   **SOAP** basado en XML.
 
 #### Decisión y Beneficios (gRPC)
-Ofrece un menor *overhead* de red gracias a HTTP/2 y serialización binaria. Maximiza el rendimiento y disminuye la latencia, factor crítico en zonas con ancho de banda restringido. REST se mantiene como opción viable solo para APIs públicas o integraciones simples.
+Ofrece menor *overhead* de red gracias a HTTP/2 y serialización binaria en la malla interna. El SLA de **< 3s** del RVN aplica al camino **Sidecar ↔ Hub ↔ Índice ↔ RVN** (gRPC). REST/FHIR hacia MINSAL **no** va en el medio de ese camino: corre en background (revalidación de caché, catálogos) o como *fallback* ante *cache-miss*. REST se mantiene para el borde oficial y APIs públicas.
 
 #### Sacrificio (Trade-off)
-Se sacrifica la legibilidad humana directa de los *payloads*. Requiere mayor disciplina en el manejo de contratos (`.proto`) y presenta una curva de aprendizaje más pronunciada. Además, introduce un riesgo de incompatibilidad con infraestructura de red legacy (proxies, firewalls) que no soporten correctamente HTTP/2, pudiendo requerir fallbacks (ej. gRPC-Web).
+Se sacrifica la legibilidad humana directa de los *payloads*. Requiere disciplina en contratos (`.proto`) y curva de aprendizaje. Riesgo de incompatibilidad con proxies/firewalls legacy (HTTP/2) → posibles fallbacks gRPC-Web. En *cache-miss* de identidad, la latencia REST del EMPI entra al camino síncrono de forma excepcional y aceptada.
 
 ---
 
@@ -330,10 +330,10 @@ Permitir que paramédicos accedan a información vital offline en emergencias, g
 *   **Token Físico NFC (TPIM) con RVN comprimido en Protobuf (Opción elegida).**
 
 #### Decisión y Beneficios (TPIM NFC)
-Implementa una arquitectura de memoria de doble zona (NDEF). La zona pública instruye al civil sobre el padecimiento específico (ganando minutos vitales). La zona privada usa Protobuf para encajar el subconjunto ultracrítico del RVN en <500 bytes. La actualización se prioriza **en cada contacto clínico** (mesón / Sidecar), no en kioscos voluntarios. Además, la aplicación de lectura extiende el ABAC: restringe la lectura privada solo a paramédicos en turno activo, forzando un Break-Glass auditable si intervienen estando fuera de servicio.
+Doble zona NDEF: zona pública en **texto plano** (lectura nativa por cualquier smartphone NFC, sin app); zona privada en Protobuf firmado para la App de Primeros Respondedores (ABAC + Break-Glass). Actualización del chip por tres canales: mesón/Sidecar (prioridad), **App Paciente / Autogestión** (Clave Única, self-service), kioscos (complemento). No hay “app de civiles”: sería redundante con el SO.
 
 #### Sacrificio (Trade-off)
-La zona pública expone intencionalmente la condición del paciente, requiriendo su consentimiento explícito previo. La información en el chip puede quedar desactualizada; el "semáforo de frescura" 🟢🟡🔴 mitiga esto, pero no elimina el riesgo de que un dato reciente sea incorrecto, creando una potencial falsa confianza. El sistema no asume cobertura universal y hace *fallback* al protocolo tradicional, asegurando que el chip sea un acelerador, no un bloqueador.
+La zona pública expone intencionalmente la condición del paciente (consentimiento explícito). El chip puede quedar desactualizado; el semáforo 🟢🟡🔴 mitiga percepción, no elimina el riesgo. Quien no tiene celular/internet/contacto clínico queda fuera de la autogestión — el sistema hace *fallback* al protocolo de trauma; el chip es acelerador, no bloqueador.
 
 ---
 
@@ -383,10 +383,10 @@ Algunos clínicos querrán más campos "por si acaso". La gobernanza del comité
 
 1.  **Fundamentos:** Arquitectura distribuida e híbrida federada; RVN como alerta (no ficha nacional).
 2.  **Integración local:** Patrones Sidecar, binario por hospital e interfaz `HospitalConnector`.
-3.  **Capa de red:** Diferencias técnicas entre REST y gRPC, JSON vs Protobuf; Hub-and-Spoke.
+3.  **Capa de red:** gRPC en camino crítico vs REST/FHIR en borde MINSAL (background / cache-miss); Hub-and-Spoke.
 4.  **Dominio médico:** Estructura FHIR, coexistencia de versiones / EOL, y semántica SNOMED CT / LOINC.
 5.  **Optimización legacy:** Operaciones ETL, Staging y contrato de esquema.
 6.  **Identidad y ciberseguridad:** `PatientIdentityProvider` (adaptador piloto → EMPI), Record Locator, HPD opcional, ABAC, Break-Glass, SDK.
 7.  **Resiliencia operativa:** Cache, Circuit Breaker, mitigación de SPOF, snapshot + replay tras desconexiones largas.
-8.  **Edge / Pre-Hospitalario:** Protocolos NFC, actualización en contacto clínico, compresión binaria y seguridad de TPIM offline.
+8.  **Edge / Pre-Hospitalario:** NDEF nativo (sin app de civiles), App Paciente, App Primeros Respondedores, TPIM offline.
 9.  **Alineación estatal:** Arquitectura híbrida MINSAL, NID (MPI+HPD), Servicios Terminológicos, FHIR R4 en el borde; acoplamiento a contrato, no a calendario.

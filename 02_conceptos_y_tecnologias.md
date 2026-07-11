@@ -54,8 +54,8 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Computación Ubicua / Dispositivos Edge.
 *   **¿Qué es?:** El Token Físico de Identidad Médica (TPIM). Un chip NFC (NTAG216) portado por el paciente que actúa como el "nodo" más pequeño y externo de la red.
-*   **Profundización:** Utiliza un sistema de **Doble Registro NDEF**. El Registro 1 es público (texto plano con instrucciones de primeros auxilios como "Epilepsia: poner de lado") y el Registro 2 es privado (Protobuf con un **subconjunto ultracrítico del RVN** comprimido, ej. alergias severas y grupo sanguíneo). Su emisión es gestionada centralmente (vía CESFAM/Clave Única). El chip se reescribe en dos instancias: (A) **Actualización activa (prioridad)**, cuando el paciente sale de una consulta en un establecimiento conectado a la MIMF, el Sidecar ofrece sincronizar el chip acercándolo a un lector del mesón — este es el camino principal, porque no se puede depender de que el paciente "recuerde" actualizar; (B) **Actualización pasiva** mediante kioscos de autoatención en CESFAM y farmacias de la red pública. Para mitigar el riesgo de datos obsoletos, la App paramédica lee la fecha del chip y aplica un semáforo de frescura visual (🟢 < 30 días, 🟡 30-90 días, 🔴 > 90 días).
-*   **Justificación:** Protege al paciente en las dos fases de la emergencia (civil y profesional). El modelo de emisión institucional resuelve la viabilidad de distribución; la actualización en cada contacto clínico reduce el riesgo de chips "muertos"; y el semáforo visual transfiere la decisión de confianza en el dato offline al criterio clínico del paramédico.
+*   **Profundización:** **Doble Registro NDEF.** Registro 1 (público): **texto plano NDEF**, pensado para lectura **nativa** por cualquier smartphone con NFC (iOS/Android muestran el contenido sin instalar app ni tener internet). No es una “app de civiles”: es una decisión de formato. Registro 2 (privado): Protobuf con subconjunto ultracrítico del RVN (alergias severas, grupo sanguíneo, etc.), firmado por el RVN. Emisión institucional (CESFAM/Clave Única). **Tres canales de escritura del chip:** (A) **prioridad** — actualización en mesón/Sidecar tras contacto clínico; (B) **App Paciente / Autogestión** (Clave Única) — el titular descarga el payload firmado del RVN y lo escribe con el NFC de su celular (cubre rural/teleconsulta con poca visita presencial); (C) kioscos CESFAM/farmacias (complemento). La App de Primeros Respondedores lee la fecha del chip y aplica semáforo de frescura (🟢 < 30 días, 🟡 30-90 días, 🔴 > 90 días).
+*   **Justificación:** Cubre civil (NDEF nativo, cero fricción) y profesional (app con ABAC). La App Paciente no mezcla modelos de confianza con el transeúnte: solo el dueño autenticado escribe. El residuo (sin celular, sin internet, sin contacto) queda cubierto por el anti-objetivo de *fallback* a trauma estándar — límite honesto, no magia.
 
 ---
 
@@ -84,11 +84,12 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Redes / Protocolos de Comunicación RPC.
 *   **¿Qué es?:** gRPC es un framework RPC (Remote Procedure Call) de Google. Usa HTTP/2 y Protocol Buffers (binarios) en lugar de JSON para enviar datos.
-*   **Profundización:** Al usar binarios en lugar de texto plano, el payload (peso del mensaje) se reduce drásticamente. Además, HTTP/2 permite multiplexar múltiples peticiones en una sola conexión TCP, reduciendo la latencia de "handshake". Se debe considerar que algunas redes hospitalarias antiguas con proxies o firewalls restrictivos pueden presentar problemas con HTTP/2; para estos casos, la arquitectura debe contemplar un mecanismo de fallback como gRPC-Web (que encapsula sobre HTTP/1.1) o una API REST equivalente para garantizar la conectividad.
-*   **Justificación:** Ofrece menor overhead de red en la malla interna. **Habilitador Crítico NFC:** la compresión de Protobuf permite empaquetar el subconjunto ultracrítico del RVN dentro de los ~888 bytes de un chip NFC básico.
+*   **Profundización:** Al usar binarios en lugar de texto plano, el payload se reduce drásticamente. HTTP/2 multiplexa peticiones en una sola conexión TCP. **Camino crítico vs. borde MINSAL:** el SLA de **< 3s** del RVN aplica **exclusivamente** al camino gRPC interno (Sidecar ↔ Hub ↔ Índice ↔ RVN). En el camino feliz, la identidad se resuelve desde la **caché local** del Sidecar; no se llama REST al EMPI en cada urgencia. Las consultas REST/FHIR hacia EMPI, HPD y Terminológicos ocurren fuera de ese camino síncrono: revalidación de caché en segundo plano, sync de catálogos, o *fallback* ante *cache-miss* (paciente nunca visto en ese Sidecar), donde se acepta el costo adicional de latencia por ser el escenario excepcional. Ante proxies/firewalls legacy que no soporten HTTP/2 bien: fallback gRPC-Web o REST equivalente **dentro** de la malla, no confundir con el borde MINSAL.
+*   **Justificación:** Ofrece menor overhead en la malla interna. **Habilitador Crítico NFC:** Protobuf permite empaquetar el subconjunto ultracrítico del RVN en ~888 bytes de un chip NTAG216. REST no “está en el medio” del camino de urgencia: corre en un carril paralelo o solo en el caso raro.
 *   **Alternativas descartadas:**
-    *   *API REST (con JSON) para el core interno Sidecar↔Hub:* Descartada por peso y latencia frente a binarios.
-    *   *Reemplazar FHIR/REST en el borde MINSAL:* Descartado. La estrategia nacional ([estándares MINSAL](https://interoperabilidad.minsal.cl/docs/especificacion-de-la-arquitectura/estandares-perfiles.html)) usa FHIR R4 sobre REST/JSON hacia EMPI, HPD y terminología. gRPC es complemento interno, no un desafío al estándar oficial.
+    *   *API REST (con JSON) para el core interno Sidecar↔Hub↔Índice↔RVN:* Descartada por peso y latencia frente a binarios en el camino crítico.
+    *   *Reemplazar FHIR/REST en el borde MINSAL:* Descartado. La estrategia nacional usa FHIR R4 sobre REST/JSON hacia EMPI, HPD y terminología. gRPC es complemento interno, no un desafío al estándar oficial.
+    *   *Forzar REST síncrono al EMPI en cada carga vital <3s:* Descartado. Rompería el SLA; la caché + carril asíncrono es el diseño correcto.
 
 ### C) Topología Hub-and-Spoke / Relays Controlados
 
@@ -237,7 +238,9 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 ## 9. Glosario / Diccionario de Términos
 
 *   **ABAC (Attribute-Based Access Control):** Control de acceso dinámico basado en atributos y contexto (ej. turno del médico, relación con el paciente), superior al clásico rol estático.
-*   **API REST:** Interfaz HTTP + JSON/XML. En la MIMF se descarta para el *core interno* Sidecar↔Hub a favor de gRPC; se mantiene obligatoria en el borde hacia componentes oficiales MINSAL (EMPI, HPD, terminología) bajo FHIR R4.
+*   **API REST:** Interfaz HTTP + JSON/XML. Obligatoria hacia componentes MINSAL (EMPI, HPD, terminología) bajo FHIR R4. En la malla interna del camino crítico de urgencia se descarta a favor de gRPC; REST hacia el Estado corre en background o solo en *cache-miss*.
+*   **App Paciente / Autogestión:** App oficial con Clave Única. Actualiza el TPIM del titular (payload firmado del RVN vía NFC del celular) y configura/consiente la zona pública. No es app de transeúntes.
+*   **App de Primeros Respondedores:** App oficial SAMU/Bomberos. Lee zona privada del TPIM con ABAC y Break-Glass.
 *   **Appliance:** Dispositivo o software preconfigurado (como el Sidecar) que se despliega "llave en mano" y es gestionado centralizadamente sin que el cliente local lo modifique.
 *   **Backpressure / Rate Limiting:** Mecanismo de control de flujo que limita la cantidad de peticiones concurrentes para evitar que un sistema legacy colapse por sobrecarga.
 *   **Break-Glass ("Romper el cristal"):** Protocolo de seguridad que permite saltar controles de acceso (ABAC) en casos de riesgo vital, dejando una estricta traza de auditoría.
@@ -250,7 +253,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **EMPI / MPI (Enterprise Master Patient Index):** Componente oficial del MINSAL para identidad demográfica unívoca del paciente. Destino definitivo del `PatientIdentityProvider`. Ver [EMPI](https://interoperabilidad.minsal.cl/docs/componentes-de-la-arquitectura/empi.html) e [IG MPI](https://interoperabilidad.minsal.cl/fhir/ig/mpi/).
 *   **ETL / Staging:** Proceso de Extraer, Transformar y Cargar datos desde una base de datos antigua a una temporal (Staging Area) en formato FHIR para lecturas ultrarrápidas.
 *   **FHIR (Fast Healthcare Interoperability Resources):** Estándar médico internacional moderno de HL7. El MINSAL adopta **FHIR R4** como estándar sintáctico nacional.
-*   **gRPC:** Framework RPC de Google (HTTP/2 + Protocol Buffers). En la MIMF se usa en la malla interna; no reemplaza FHIR/REST hacia el Estado.
+*   **gRPC:** Framework RPC de Google (HTTP/2 + Protocol Buffers). Transporte del camino crítico interno (Sidecar-Hub-Índice-RVN, SLA < 3s). No reemplaza FHIR/REST hacia el Estado.
 *   **HA (High Availability) / SLA:** Alta Disponibilidad de un sistema, garantizada por un Acuerdo de Nivel de Servicio (ej. 99.9% de uptime).
 *   **HL7 (Health Level Seven):** Organización internacional y conjunto de estándares (v2, v3, CDA, FHIR) para el intercambio de información clínica.
 *   **HPD (Healthcare Provider Directory):** Directorio nacional de prestadores. Enchufable a ABAC cuando esté operativo; no bloquea el piloto. Ver [IG HPD](https://interoperabilidad.minsal.cl/fhir/ig/hpd/).
@@ -269,6 +272,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **MINSAL:** Ministerio de Salud de Chile. Entidad encargada de normar la gobernanza clínica.
 *   **Modo Degradado (Offline-First):** Estado del Sidecar cuando el hospital pierde internet nacional. Permite continuar atenciones locales y encola los datos hasta recuperar conexión.
 *   **NAT (Network Address Translation):** Tecnología de redes corporativas que oculta las IP internas, dificultando las conexiones directas P2P entre hospitales.
+*   **NDEF (texto plano):** Formato de la Zona Pública del TPIM. Lectura nativa por smartphones con NFC; no requiere app MIMF de civiles.
 *   **OpenTelemetry / Tracing Distribuido:** Estándar de observabilidad que añade un ID a cada petición clínica para rastrear y medir en qué punto exacto de la red hay lentitud o errores.
 *   **OTA (Over-The-Air):** Actualizaciones enviadas de forma remota. El Estado actualiza los Sidecars OTA sin requerir personal TI en cada hospital rural.
 *   **Protocol Buffers (Protobuf):** Mecanismo de Google para serializar datos estructurados en formato binario, siendo mucho más pequeño y veloz de transmitir que el XML o JSON.

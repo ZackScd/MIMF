@@ -12,6 +12,7 @@ MIMF propone una arquitectura **híbrida federada**, alineada a la [Arquitectura
 - un **RVN** (Resumen Vital Nacional) entrega lo crítico en urgencias
 - **Sidecars** perimetrales traducen sistemas legacy a FHIR sin tocar el código del proveedor
 - un **TPIM** (chip NFC) cubre el escenario offline pre-hospitalario
+- **2 apps oficiales:** Primeros Respondedores + Paciente/Autogestión; la zona pública del chip la lee cualquier celular NFC (NDEF), sin app de civiles
 
 Para leer esta wea, empieza por `01_proyecto.md` y después baja a `02` / `03` cuando te pidan justificar decisiones.
 
@@ -168,6 +169,31 @@ Se descartó UUID/HMAC(RUT) como maestro de identidad. HMAC, si se usa, solo pse
 **Por qué:** La Ley 21.668 no garantiza que los IGs draft estén en producción. Dependencia dura del servicio nacional = bloqueante. Dependencia del contrato = reemplazo limpio.
 
 **Dónde:** `01` (identidad, flujo, despliegue por fases, anti-objetivos), `02` (sección Índice/identidad + glosario), `03` (§11), `00` (tabla de alineación).
+
+---
+
+### 13. gRPC en camino crítico vs REST/FHIR en el borde (no es contradicción)
+
+**Qué cambió:** Se explicitó que el SLA **< 3s** del RVN aplica solo al camino interno **gRPC** (Sidecar ↔ Hub ↔ Índice ↔ RVN). REST/FHIR hacia EMPI/HPD/Terminológicos corre en **background** (revalidación de caché, catálogos) o como *fallback* ante **cache-miss** — no “en el medio” de cada urgencia.
+
+**Por qué:** Evita la pregunta de comisión “¿para qué gRPC si igual hay REST?”. La ganancia de latencia está en el camino feliz; el costo REST se acepta solo en el caso excepcional.
+
+**Dónde:** `01` (estándar/transporte), `02` (gRPC), `03` (§4), tabla en `00`.
+
+---
+
+### 14. Apps: dos oficiales + NDEF nativo (sin app de civiles)
+
+**Qué cambió:**
+- **No hay app de civiles.** La Zona Pública es **NDEF texto plano**: cualquier smartphone con NFC la lee nativamente (sin instalar nada, sin internet).
+- **App de Primeros Respondedores** (SAMU/Bomberos): zona privada, ABAC, Break-Glass, pre-alerta.
+- **App Paciente / Autogestión** (Clave Única): actualiza *su* TPIM (payload firmado del RVN vía NFC del celular) y configura/consiente la zona pública.
+- Canales de escritura del chip: mesón/Sidecar (prioridad) → App Paciente → kioscos (complemento).
+- SDK/API/OAuth sigue para hospitales/proveedores (no es una tercera app de calle).
+
+**Por qué:** Una app solo para mostrar texto NDEF es redundante con el SO. Mezclar lectura de transeúntes con escritura del chip rompería el modelo de confianza. La App Paciente cubre al que no pisa un hospital conectado pero sí tiene celular/internet; el resto hace *fallback* a trauma estándar.
+
+**Dónde:** `01` (componentes, flujos NFC, consentimiento), `02` (TPIM/NFC + glosario), `03` (§15 + orden de estudio).
 
 ---
 

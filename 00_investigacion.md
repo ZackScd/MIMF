@@ -73,13 +73,13 @@ La propuesta arquitectónica de la **Malla de Interoperabilidad Médica Federada
 
 **Comparativa de Enfoques (MIMF vs. Tendencia Estatal actual):**
 
-| Componente        | Tu Propuesta (MIMF)                   | Tendencia Estatal 2026                        |
+| Componente        | Tu Propuesta (MIMF)                   | Tendencia Estatal 2026 (corte doc. pública)   |
 | ------------------| --------------------------------------| ----------------------------------------------|
 | **Arquitectura**  | **Federada Híbrida** (Soberanía local)| Repositorio central / Migración masiva        |
-| **Transporte**    | **gRPC + Protobuf** (Optimizado para baja latencia) | Mayoritariamente **API REST + JSON** (Alto peso) |
+| **Transporte**    | **gRPC + Protobuf** en camino crítico interno; REST/FHIR al borde MINSAL (async / cache-miss) | Mayoritariamente **API REST + JSON** |
 | **Seguridad**     | **ABAC** (Control por Contexto clínico) | **RBAC** (Control por Roles estáticos)        |
 | **Integración**   | **Sidecar compilado por hospital** + interfaz `HospitalConnector` certificable | Adaptadores *ad-hoc* por cada proveedor       |
-| **Identidad**     | **Consume EMPI/MPI MINSAL** + Record Locator propio para descubrimiento clínico | EMPI/MPI + HPD + Terminología (NID); sin locator clínico explícito en la doc pública |
+| **Identidad**     | **Consume EMPI/MPI MINSAL** vía `PatientIdentityProvider` + Record Locator propio | EMPI/MPI + HPD + Terminología (NID); sin locator clínico explícito en la doc pública *al momento de esta investigación* |
 
 **Ventajas Críticas de la Arquitectura MIMF:**
 1. **Interoperabilidad Semántica (SNOMED CT / LOINC):** Resuelve el problema de que una simple conexión de red no garantiza entendimiento médico. Asegura que el significado clínico de un "Infarto" sea universal en todo Chile, complementando la sintaxis de FHIR (con coexistencia de versiones del Perfil Chile y ventanas de EOL), y alineándose a los [Servicios Terminológicos](https://interoperabilidad.minsal.cl/docs/componentes-de-la-arquitectura/terminologicos.html) del MINSAL cuando estén disponibles.
