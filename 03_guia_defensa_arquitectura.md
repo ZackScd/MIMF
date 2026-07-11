@@ -48,10 +48,10 @@ Integrar sistemas *legacy* cerrados y heterogéneos sin modificar su código fue
 *   **Patrón Sidecar / Appliance gestionado (Opción elegida).**
 
 #### Decisión y Beneficios (Sidecar con conectores modulares)
-Permite la integración sin intervenir el código fuente del sistema legacy. Desacopla la lógica de negocio (hospital) de la lógica de plataforma (red nacional). Es modular y menos invasivo que una refactorización completa o un ESB monolítico.
+Permite la integración sin intervenir el código fuente del sistema legacy. Desacopla la lógica de negocio (hospital) de la lógica de plataforma (red nacional). Cada hospital recibe un **binario compilado** (Core + conector de su familia de EHR), no un ejecutable con todos los plugins del país. Además, la MIMF publica la interfaz `HospitalConnector`: el conector puede mantenerlo el equipo nacional o el propio proveedor, certificado en Sandbox.
 
 #### Sacrificio (Trade-off)
-Aumenta la superficie de componentes desplegados. Requiere mecanismos robustos para monitoreo y actualizaciones OTA. El concepto de "caja negra universal" es una simplificación; en la práctica, exige el desarrollo y mantenimiento de una librería de conectores específicos para las distintas familias de EHR del mercado, transformándose en una solución de "producto + consultoría" en lugar de un simple ejecutable.
+Aumenta la superficie de componentes desplegados. Requiere mecanismos robustos para monitoreo y actualizaciones OTA. El concepto de "caja negra universal" es una simplificación; en la práctica, exige el desarrollo y mantenimiento de una librería de conectores específicos para las distintas familias de EHR del mercado. La interfaz certificable mitiga —pero no elimina— la carga operativa a largo plazo.
 
 ---
 
@@ -136,10 +136,10 @@ Establecer un "idioma" común (sintaxis) para que todos los sistemas intercambie
 *   **openEHR.**
 
 #### Decisión y Beneficios (FHIR)
-Es el estándar mundial moderno, basado en recursos modulares (RESTful) que se adaptan perfectamente a arquitecturas web. Es más flexible y fácil de implementar que sus predecesores.
+Es el estándar mundial moderno, basado en recursos modulares (RESTful) que se adaptan perfectamente a arquitecturas web. Es más flexible y fácil de implementar que sus predecesores. El Perfil Chile evoluciona por versiones; los Sidecars operan en **coexistencia** (varias versiones en paralelo) con ventanas de *End-of-Life* anunciadas, no con cortes nacionales forzados.
 
 #### Sacrificio (Trade-off)
-FHIR establece la sintaxis, pero no resuelve la semántica por sí solo. Requiere la construcción de "Perfiles" nacionales y una fuerte gobernanza para evitar implementaciones divergentes.
+FHIR establece la sintaxis, pero no resuelve la semántica por sí solo. Requiere la construcción de "Perfiles" nacionales y una fuerte gobernanza para evitar implementaciones divergentes. La coexistencia de versiones aumenta la complejidad del Core (negociación de versión en handshake) a cambio de no romper hospitales rezagados.
 
 ---
 
@@ -180,10 +180,10 @@ Acceder a los datos de los sistemas *legacy* sin afectar su rendimiento ni estab
 *   **Arquitecturas completas de Data Lake o Data Warehouse.**
 
 #### Decisión y Beneficios (Staging Híbrido)
-Protege la base de datos antigua al desacoplar la carga de lectura. Acelera los tiempos de respuesta al tener los datos pre-transformados a formato FHIR. Se descarta la consulta directa por el riesgo crítico de saturar y botar los sistemas que operan el hospital.
+Protege la base de datos antigua al desacoplar la carga de lectura. Acelera los tiempos de respuesta al tener los datos pre-transformados a formato FHIR. Se descarta la consulta directa por el riesgo crítico de saturar y botar los sistemas que operan el hospital. Los cambios estructurales del EHR se tratan como **problema contractual**: el hospital/proveedor debe notificarlos; el conector se actualiza en paralelo por soporte humano (MIMF o proveedor certificado). No se automatiza la "auto-reparación" de mapeos.
 
 #### Sacrificio (Trade-off)
-Los datos en el *staging* presentan un desfase temporal. Este riesgo se mitiga, pero no se elimina, mediante una estrategia de sincronización híbrida (near-real time para datos vitales, batch para el resto). Una falla en el ETL de datos críticos podría llevar a decisiones clínicas basadas en información incompleta.
+Los datos en el *staging* presentan un desfase temporal. Este riesgo se mitiga, pero no se elimina, mediante una estrategia de sincronización híbrida (near-real time para datos vitales, batch para el resto). Una falla en el ETL de datos críticos podría llevar a decisiones clínicas basadas en información incompleta. Depender de notificación humana implica que un cambio no reportado puede entregar datos incorrectos hasta que se detecte.
 
 ---
 
@@ -200,7 +200,7 @@ Garantizar que el acceso a la información del paciente cumpla con la ley de pro
 *   **ABAC (Attribute-Based Access Control) (Opción elegida):** Control por contexto.
 
 #### Decisión y Beneficios (ABAC)
-En salud, el rol "Médico" es insuficiente. ABAC evalúa el contexto: ¿el profesional está de turno?, ¿tiene una cita con el paciente? Esto bloquea accesos no autorizados y cumple estrictamente con la ley de privacidad.
+En salud, el rol "Médico" es insuficiente. ABAC evalúa el contexto: ¿el profesional está de turno?, ¿tiene una cita con el paciente? Los atributos se leen (no se escriben) desde agenda, admisión, RRHH o SAMU. Además se expone SDK/API/OAuth para que un proveedor integre el control en su propio sistema. Esto bloquea accesos no autorizados y cumple estrictamente con la ley de privacidad.
 
 #### Sacrificio (Trade-off)
 Incrementa la complejidad y depende críticamente de la disponibilidad y calidad de los sistemas periféricos (agendas, admisión) para obtener los atributos. Una falla en estas fuentes puede generar denegaciones de acceso legítimas, fomentando un abuso del protocolo Break-Glass como "solución" informal y degradando el modelo de seguridad.
@@ -228,25 +228,26 @@ Introduce una excepción controlada a la seguridad. Requiere obligatoriamente me
 
 ---
 
-## 11. Hashing/Salt vs. Cifrado en el Índice
+## 11. EMPI (Identidad) vs. Record Locator vs. Adaptador Temporal
 
 #### Conceptos a Estudiar
-Criptografía aplicada a identificadores (Hashing, Salt, HMAC), Tokenización vs cifrado reversible, Pseudonimización.
+EMPI / MPI, Record Locator Service, PIXm / PDQm (IHE), patrón Adapter / Ports & Adapters, HMAC, NID MINSAL, dependencia de calendario vs. contrato.
 
 #### Problema a Resolver
-Proteger la identidad de los pacientes en el Índice Nacional de Descubrimiento, que solo debe enrutar peticiones, no almacenar datos personales legibles.
+Separar: (1) quién es el paciente, (2) dónde están sus datos clínicos, (3) cómo no bloquear el piloto si el EMPI/HPD nacionales aún no están operativos en terreno — sin reinventar un maestro permanente ni acoplarse al calendario del Estado.
 
 #### Alternativas
-*   Almacenar el RUT en **texto plano**.
-*   **Cifrado bidireccional** del RUT.
-*   Aplicación de **Hash con Salt criptográfico (Opción elegida).**
-*   **Plataformas de Tokenización centralizada.**
+*   **HMAC(RUT) o UUID MIMF** como maestro de identidad.
+*   **Usar solo el EMPI** también como mapa de fichas clínicas.
+*   **Esperar a que el EMPI/HPD estén 100% listos** antes de cualquier piloto.
+*   **Hardcodear identidad al EMPI** sin interfaz intercambiable.
+*   **`PatientIdentityProvider` + Record Locator (Opción elegida):** contrato estable; backend temporal (piloto) o EMPI nacional (régimen); caché de resoluciones; HMAC solo como pseudonimización opcional del locator.
 
-#### Decisión y Beneficios (HMAC con clave secreta)
-Se opta por un **HMAC (Hash-based Message Authentication Code)** en lugar de un simple hash+salt. Esto minimiza la superficie de ataque y, al depender de una clave secreta (gestionada en un KMS y rotada periódicamente), mitiga significativamente el riesgo de ataques de fuerza bruta o de diccionario contra el universo conocido de RUTs, incluso si el código del sistema se filtra.
+#### Decisión y Beneficios
+La malla no habla “directo” con un servicio que puede no existir aún: habla con `PatientIdentityProvider`. Destino = [EMPI/MPI](https://interoperabilidad.minsal.cl/docs/componentes-de-la-arquitectura/empi.html). Mientras tanto = adaptador de piloto (mismas operaciones). Al madurar el servicio oficial, se **cambia el adaptador**; no se reescribe Record Locator, Sidecar, RVN ni TPIM. El locator sigue indexando por ID canónico. HPD se trata igual para ABAC: opcional al inicio.
 
 #### Sacrificio (Trade-off)
-La irreversibilidad del hash elimina la capacidad del sistema central para recuperar el dato. Implica una gestión robusta y segura del 'salt' (vía un KMS).
+Hay que mantener (y luego retirar) el adaptador temporal con disciplina: no dejar que crezca como segundo EMPI. La migración piloto→EMPI exige plan de reindexación del locator y pruebas de fusión. Mientras corre el temporal, la calidad del merge depende de soporte/proceso, no del algoritmo nacional.
 
 ---
 
@@ -329,20 +330,63 @@ Permitir que paramédicos accedan a información vital offline en emergencias, g
 *   **Token Físico NFC (TPIM) con RVN comprimido en Protobuf (Opción elegida).**
 
 #### Decisión y Beneficios (TPIM NFC)
-Implementa una arquitectura de memoria de doble zona (NDEF). La zona pública instruye al civil sobre el padecimiento específico (ganando minutos vitales). La zona privada usa Protobuf para encajar todo el RVN clínico en <500 bytes. Además, la aplicación de lectura extiende el ABAC: restringe la lectura privada solo a paramédicos en turno activo, forzando un Break-Glass auditable si intervienen estando fuera de servicio.
+Implementa una arquitectura de memoria de doble zona (NDEF). La zona pública instruye al civil sobre el padecimiento específico (ganando minutos vitales). La zona privada usa Protobuf para encajar el subconjunto ultracrítico del RVN en <500 bytes. La actualización se prioriza **en cada contacto clínico** (mesón / Sidecar), no en kioscos voluntarios. Además, la aplicación de lectura extiende el ABAC: restringe la lectura privada solo a paramédicos en turno activo, forzando un Break-Glass auditable si intervienen estando fuera de servicio.
 
 #### Sacrificio (Trade-off)
 La zona pública expone intencionalmente la condición del paciente, requiriendo su consentimiento explícito previo. La información en el chip puede quedar desactualizada; el "semáforo de frescura" 🟢🟡🔴 mitiga esto, pero no elimina el riesgo de que un dato reciente sea incorrecto, creando una potencial falsa confianza. El sistema no asume cobertura universal y hace *fallback* al protocolo tradicional, asegurando que el chip sea un acelerador, no un bloqueador.
 
 ---
 
+## 16. Interfaz de Conectores Certificables vs. Equipo Único Nacional
+
+#### Conceptos a Estudiar
+Plugin architectures, contratos de interfaz, certificación de terceros, modelos CSI/CNI (Kubernetes), vendor-maintained adapters.
+
+#### Problema a Resolver
+Evitar que un único equipo MIMF tenga que conocer y mantener, durante décadas, el esquema interno de todos los EHR del país.
+
+#### Alternativas
+*   **Equipo central mantiene todos los conectores** para siempre.
+*   **Cada hospital inventa su propio adaptador** sin contrato común.
+*   **Interfaz oficial `HospitalConnector` + certificación (Opción elegida).**
+
+#### Decisión y Beneficios
+Se publica un contrato de interfaz. El Core de la MIMF solo habla con esa interfaz. El conector lo puede mantener MIMF o el proveedor del EHR (certificado en Sandbox). Si el proveedor cambia su esquema, es **su** conector el que debe actualizarse para seguir siendo compatible. Distribuye la carga y alinea incentivos con la Ley 21.668.
+
+#### Sacrificio (Trade-off)
+Exige gobernanza de certificación, versionado de la interfaz y soporte a proveedores con calidad desigual. Un conector mal implementado por un tercero puede degradar un nodo; por eso el Sandbox y la observabilidad no son opcionales.
+
+---
+
+## 17. RVN como Alerta vs. Ficha Nacional
+
+#### Conceptos a Estudiar
+Scope creep, gobernanza clínica, International Patient Summary (IPS), separación de concerns clínico-técnicos.
+
+#### Problema a Resolver
+Definir el rol del Resumen Vital Nacional sin que se convierta, por presión política de especialidades, en una ficha clínica centralizada.
+
+#### Alternativas
+*   **Ficha clínica nacional completa** en el centro.
+*   **Solo índice** (sin resumen vital central).
+*   **RVN mínimo como alerta de urgencia (Opción elegida).**
+
+#### Decisión y Beneficios
+El RVN muestra lo ultracrítico (alergias, medicamentos, grupo sanguíneo, diagnósticos vitales) y señala que existe historial profundo en otros nodos, invitando al *lazy loading*. No compite con el EHR del hospital. Eso reduce el incentivo de cada especialidad a "meterse" al resumen central.
+
+#### Sacrificio (Trade-off)
+Algunos clínicos querrán más campos "por si acaso". La gobernanza del comité (con voto dirimente de Calidad y Seguridad del Paciente) debe resistir esa presión de forma continua; no es un problema que se resuelva una sola vez.
+
+---
+
 ## Orden de Estudio y Preparación de Defensa
 
-1.  **Fundamentos:** Arquitectura distribuida e híbrida federada.
-2.  **Integración local:** Patrones Sidecar y topologías Hub-and-Spoke.
-3.  **Capa de red:** Diferencias técnicas entre REST y gRPC, JSON vs Protobuf.
-4.  **Dominio médico:** Estructura FHIR y semántica SNOMED CT / LOINC.
-5.  **Optimización legacy:** Operaciones ETL y almacenamiento Staging.
-6.  **Ciberseguridad clínica:** Modelos ABAC, protocolo Break-glass y Hashing.
-7.  **Resiliencia operativa:** Implementación de Cache, Circuit Breaker y mitigación de SPOF.
-8.  **Edge / Pre-Hospitalario:** Protocolos NFC, compresión binaria extrema y seguridad de TPIM offline.
+1.  **Fundamentos:** Arquitectura distribuida e híbrida federada; RVN como alerta (no ficha nacional).
+2.  **Integración local:** Patrones Sidecar, binario por hospital e interfaz `HospitalConnector`.
+3.  **Capa de red:** Diferencias técnicas entre REST y gRPC, JSON vs Protobuf; Hub-and-Spoke.
+4.  **Dominio médico:** Estructura FHIR, coexistencia de versiones / EOL, y semántica SNOMED CT / LOINC.
+5.  **Optimización legacy:** Operaciones ETL, Staging y contrato de esquema.
+6.  **Identidad y ciberseguridad:** `PatientIdentityProvider` (adaptador piloto → EMPI), Record Locator, HPD opcional, ABAC, Break-Glass, SDK.
+7.  **Resiliencia operativa:** Cache, Circuit Breaker, mitigación de SPOF, snapshot + replay tras desconexiones largas.
+8.  **Edge / Pre-Hospitalario:** Protocolos NFC, actualización en contacto clínico, compresión binaria y seguridad de TPIM offline.
+9.  **Alineación estatal:** Arquitectura híbrida MINSAL, NID (MPI+HPD), Servicios Terminológicos, FHIR R4 en el borde; acoplamiento a contrato, no a calendario.

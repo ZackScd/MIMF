@@ -78,12 +78,28 @@ La propuesta arquitectónica de la **Malla de Interoperabilidad Médica Federada
 | **Arquitectura**  | **Federada Híbrida** (Soberanía local)| Repositorio central / Migración masiva        |
 | **Transporte**    | **gRPC + Protobuf** (Optimizado para baja latencia) | Mayoritariamente **API REST + JSON** (Alto peso) |
 | **Seguridad**     | **ABAC** (Control por Contexto clínico) | **RBAC** (Control por Roles estáticos)        |
-| **Integración**   | **Sidecars / Appliance** (No intrusivo) | Adaptadores *ad-hoc* por cada proveedor       |
+| **Integración**   | **Sidecar compilado por hospital** + interfaz `HospitalConnector` certificable | Adaptadores *ad-hoc* por cada proveedor       |
+| **Identidad**     | **Consume EMPI/MPI MINSAL** + Record Locator propio para descubrimiento clínico | EMPI/MPI + HPD + Terminología (NID); sin locator clínico explícito en la doc pública |
 
 **Ventajas Críticas de la Arquitectura MIMF:**
-1. **Interoperabilidad Semántica (SNOMED CT / LOINC):** Resuelve el problema de que una simple conexión de red no garantiza entendimiento médico. Asegura que el significado clínico de un "Infarto" sea universal en todo Chile, complementando la sintaxis de FHIR.
+1. **Interoperabilidad Semántica (SNOMED CT / LOINC):** Resuelve el problema de que una simple conexión de red no garantiza entendimiento médico. Asegura que el significado clínico de un "Infarto" sea universal en todo Chile, complementando la sintaxis de FHIR (con coexistencia de versiones del Perfil Chile y ventanas de EOL), y alineándose a los [Servicios Terminológicos](https://interoperabilidad.minsal.cl/docs/componentes-de-la-arquitectura/terminologicos.html) del MINSAL cuando estén disponibles.
 2. **Soberanía y Protección de Datos:** Al ser un diseño federado puro para el historial profundo, preserva la autoría inmutable en el hospital de origen. Esto es inherentemente más robusto y defendible ante la **Ley de Protección de Datos (19.628)** en comparación a un "mega repositorio" centralizado susceptible a vulneraciones masivas.
 3. **Continuidad Pre-Hospitalaria (Offline-First en terreno):** A diferencia de las visiones estatales puramente de "nube", MIMF incorpora el uso de **Chips NFC (Tokens Físicos)** para paramédicos, permitiendo que la información vital esté disponible de forma instantánea en accidentes vehiculares o zonas rurales sin internet, pre-alertando a los hospitales antes de que el paciente ingrese por urgencias.
+4. **Integración sostenible:** El Sidecar no pretende ser un ejecutable mágico universal. Se despliega como binario específico (Core + conector) y permite que los proveedores certifiquen sus propios conectores, alineando la carga de mantenimiento con quien conoce el esquema interno del EHR.
+5. **Complemento (no competencia) con el NID:** La MIMF **consume** el EMPI para identidad y puede apoyarse en el HPD para prestadores. Aporta lo que la documentación pública del MINSAL aún no materializa como producto operativo de malla: Sidecars, Record Locator clínico, RVN de urgencia y TPIM offline.
+
+### Alineación con la Arquitectura Nacional de Interoperabilidad (MINSAL)
+
+Fuente: [interoperabilidad.minsal.cl](https://interoperabilidad.minsal.cl/).
+
+| Componente MINSAL | Rol oficial | Relación con MIMF |
+| ----------------- | ----------- | ----------------- |
+| **Modelo híbrido** centralizado-distribuido | Estrategia base de la [arquitectura](https://interoperabilidad.minsal.cl/docs/especificacion-de-la-arquitectura/arquitectura.html) | Compatible con la tesis federada + RVN mínimo |
+| **EMPI / MPI** | Identidad demográfica unívoca | **Destino** de `PatientIdentityProvider`; adaptador temporal en piloto hasta que esté operativo |
+| **HPD** | Directorio de prestadores | Atributos ABAC cuando esté disponible; no bloquea el piloto |
+| **Servicios Terminológicos** | CodeSystem / ValueSet / ConceptMap (IHE mSVCM) | Apoyo semántico; Sidecars consumen catálogos oficiales |
+| **NID** | Núcleo FHIR (MPI + HPD) | Contrato de integración en el borde (FHIR R4 / REST) |
+| **FHIR R4** | Estándar sintáctico nacional | Obligatorio hacia el Estado; gRPC queda para malla interna |
 
 **Conclusión:**
-El Estado chileno está fijando las reglas normativas, pero aún carece de la infraestructura operativa que materialice la ley en terreno. La "caja negra" perimetral (Sidecar) propuesta en MIMF, combinada con la identidad física portátil (NFC), representa la pieza faltante en el puzzle nacional: la información médica crítica viaja con el paciente, ya sea digitalmente entre instituciones o físicamente en su bolsillo para escenarios de emergencia extrema.
+El Estado chileno está fijando las reglas normativas y los componentes de identidad/prestadores/terminología, pero los IGs públicos (MPI/HPD) aún lucen inmaduros como producto en terreno. La MIMF se posiciona como **capa de malla clínica** que se acopla al **contrato** del NID/EMPI —no a su calendario— mediante `PatientIdentityProvider` (adaptador temporal → EMPI real). Aporta lo que la doc pública aún no materializa operativamente: Sidecars, Record Locator, RVN y TPIM.

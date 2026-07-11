@@ -7,6 +7,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   No reemplaza los sistemas (EHR) existentes en los hospitales.
 *   No unifica todo el historial clínico profundo en una base de datos central.
 *   No resuelve automáticamente la calidad semántica del dato; si el nodo de origen no realiza un mapeo local correcto, el sistema no lo adivina.
+*   No reimplementa de forma permanente el EMPI/MPI ni el HPD del MINSAL; el destino es consumirlos. El adaptador temporal de identidad es solo para piloto.
 *   El Token Físico (NFC) NO reemplaza el sistema de red, es estrictamente una caché física offline de último recurso.
 
 ---
@@ -17,8 +18,8 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Arquitectura de Sistemas Distribuidos.
 *   **¿Qué es?:** El 99% de la información (historia profunda) vive federada en los nodos locales. Sin embargo, existe un "Resumen Vital Nacional" (RVN - Alergias y Diagnósticos Críticos) que se aloja en un repositorio central.
-*   **Profundización:** Se distribuye la carga pesada (imágenes, evoluciones diarias) manteniendo al hospital como "fuente de verdad". Se centraliza estrictamente el enrutamiento (Índice) y la urgencia (RVN). El contenido del RVN es regido por un comité nacional clínico-técnico (MINSAL y Colegios Profesionales) que aprueba y publica nuevas versiones del esquema anualmente bajo estrictos criterios de evidencia médica. Si el centro cae, los hospitales operan en "Modo Degradado".
-*   **Justificación:** Evita el costo inasumible de centralizar petabytes de datos legados, pero asegura disponibilidad inmediata de información crítica en urgencias.
+*   **Profundización:** Se distribuye la carga pesada (imágenes, evoluciones diarias) manteniendo al hospital como "fuente de verdad". Se centraliza estrictamente el enrutamiento (Índice) y la urgencia (RVN). El RVN no pretende ser una ficha nacional: es un **recordatorio clínico de urgencia** (alergias, medicamentos críticos, grupo sanguíneo, diagnósticos vitales) más una señal de que existe historial profundo en otros nodos. El contenido del RVN es regido por un comité nacional clínico-técnico (MINSAL y Colegios Profesionales) que aprueba y publica nuevas versiones del esquema anualmente bajo estrictos criterios de evidencia médica. Si el centro cae, los hospitales operan en "Modo Degradado".
+*   **Justificación:** Evita el costo inasumible de centralizar petabytes de datos legados, pero asegura disponibilidad inmediata de información crítica en urgencias. Enmarcar el RVN como alerta (y no como competencia del EHR) es la principal defensa contra el *scope creep* político de especialidades que quieran "meterse" al resumen central.
 *   **Alternativas descartadas:**
     *   *Nube Centralizada Nacional (Migración Total):* Descartada por el alto costo de migración, resistencia institucional, y complejidad de mantener un modelo de datos único frente a sistemas heterogéneos.
 
@@ -26,16 +27,21 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Patrones de Arquitectura Cloud-Native / Microservicios.
 *   **¿Qué es?:** Un software auxiliar gestionado de forma centralizada (Appliance) que se despliega junto a la base legacy. El hospital local no tiene permisos para modificarlo.
-*   **Profundización:** Desacopla la lógica de negocio (el sistema del hospital) de la lógica de plataforma (cómo comunicarse con la red nacional). Si el estándar FHIR se actualiza, el Estado empuja la actualización OTA (Over-The-Air) al Sidecar.
-*   **Justificación:** Los sistemas de los hospitales ("EHRs") son frágiles y cerrados (vendor lock-in). Tocar su código es inviable legal y técnicamente. El Sidecar actúa como un traductor externo no intrusivo.
+*   **Profundización:** Desacopla la lógica de negocio (el sistema del hospital) de la lógica de plataforma (cómo comunicarse con la red nacional). El Sidecar **no es un binario universal** con todos los conectores del país: cada hospital recibe un ejecutable compilado con **Core + el conector de su familia de EHR** (Oracle, InterSystems, SAP, SQL Server, etc.). Si el estándar FHIR se actualiza, el Estado empuja la actualización OTA al Sidecar correspondiente.
+*   **Interfaz oficial de conectores (`HospitalConnector`):** La MIMF publica un contrato de interfaz (estilo CSI/CNI de Kubernetes) con operaciones tipadas (`GetPatient`, `GetEncounter`, `GetMedication`, `GetAllergies`, `SearchPatient`, `MapFHIR`, etc.). Dos caminos de mantenimiento:
+    1. El equipo MIMF desarrolla y mantiene el conector.
+    2. El proveedor del EHR desarrolla su propio conector y lo certifica en el Sandbox estatal.
+    Así el Core permanece estable y la carga de conocer el esquema interno de cada EHR no cae eternamente sobre un único equipo nacional.
+*   **Justificación:** Los sistemas de los hospitales ("EHRs") son frágiles y cerrados (vendor lock-in). Tocar su código es inviable legal y técnicamente. El Sidecar actúa como un traductor externo no intrusivo. Compilar por hospital reduce RAM, dependencias, superficie de ataque y simplifica el testing.
 *   **Alternativas descartadas:**
     *   *Refactorizar / Modificar el código de cada hospital:* Descartado por ser legalmente imposible (viola garantías de proveedores comerciales) y requerir esfuerzo humano inabarcable.
+    *   *Sidecar monolítico con todos los plugins:* Descartado. Arrastra módulos fantasma, aumenta el riesgo de seguridad y complica el despliegue en servidores con poca RAM.
 
 ### C) Modo Degradado (Resiliencia Local)
 
 *   **Rama / Concepto:** Ingeniería de Confiabilidad (SRE) / Tolerancia a Fallos.
 *   **¿Qué es?:** Capacidad del sistema de seguir funcionando con funcionalidades limitadas (localmente) cuando la conexión a la red externa falla.
-*   **Profundización:** Implementa una filosofía "Offline-First". Si la conexión a internet del hospital se corta, el Sidecar encola los eventos locales y los sincroniza automáticamente (Sync Queue) una vez que vuelve la conexión.
+*   **Profundización:** Implementa una filosofía "Offline-First". Si la conexión a internet del hospital se corta, el Sidecar encola los eventos locales y los sincroniza automáticamente (Sync Queue) una vez que vuelve la conexión. Para cortes cortos (horas/días) basta el replay de la cola. Para desconexiones **prolongadas** (semanas/meses), la reincorporación usa **snapshot del estado relevante + replay controlado** (límites de tasa, priorización de datos del RVN, compresión), evitando saturar el Hub o el Índice con millones de eventos de golpe.
 *   **Justificación:** En salud, la tolerancia a fallos es cero. Si la MIMF se cae, el médico debe poder seguir atendiendo usando la información de la base de datos local del hospital sin experimentar bloqueos ("freezes").
 
 ### D) Consistencia Clínica (Fuentes de Verdad)
@@ -48,30 +54,41 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Computación Ubicua / Dispositivos Edge.
 *   **¿Qué es?:** El Token Físico de Identidad Médica (TPIM). Un chip NFC (NTAG216) portado por el paciente que actúa como el "nodo" más pequeño y externo de la red.
-*   **Profundización:** Utiliza un sistema de **Doble Registro NDEF**. El Registro 1 es público (texto plano con instrucciones de primeros auxilios como "Epilepsia: poner de lado") y el Registro 2 es privado (Protobuf con un **subconjunto ultracrítico del RVN** comprimido, ej. alergias severas y grupo sanguíneo). Su emisión es gestionada centralmente (vía CESFAM/Clave Única). El chip se reescribe en dos instancias: (A) **Actualización activa**, cuando el paciente sale de una consulta en un establecimiento conectado a la MIMF, el Sidecar ofrece sincronizar el chip acercándolo a un lector del mesón; (B) **Actualización pasiva** mediante kioscos de autoatención en CESFAM y farmacias de la red pública. Para mitigar el riesgo de datos obsoletos, la App paramédica lee la fecha del chip y aplica un semáforo de frescura visual (🟢 < 30 días, 🟡 30-90 días, 🔴 > 90 días).
-*   **Justificación:** Protege al paciente en las dos fases de la emergencia (civil y profesional). El modelo de emisión institucional resuelve la viabilidad de distribución, y el semáforo visual transfiere la decisión de confianza en el dato offline al criterio clínico del paramédico.
+*   **Profundización:** Utiliza un sistema de **Doble Registro NDEF**. El Registro 1 es público (texto plano con instrucciones de primeros auxilios como "Epilepsia: poner de lado") y el Registro 2 es privado (Protobuf con un **subconjunto ultracrítico del RVN** comprimido, ej. alergias severas y grupo sanguíneo). Su emisión es gestionada centralmente (vía CESFAM/Clave Única). El chip se reescribe en dos instancias: (A) **Actualización activa (prioridad)**, cuando el paciente sale de una consulta en un establecimiento conectado a la MIMF, el Sidecar ofrece sincronizar el chip acercándolo a un lector del mesón — este es el camino principal, porque no se puede depender de que el paciente "recuerde" actualizar; (B) **Actualización pasiva** mediante kioscos de autoatención en CESFAM y farmacias de la red pública. Para mitigar el riesgo de datos obsoletos, la App paramédica lee la fecha del chip y aplica un semáforo de frescura visual (🟢 < 30 días, 🟡 30-90 días, 🔴 > 90 días).
+*   **Justificación:** Protege al paciente en las dos fases de la emergencia (civil y profesional). El modelo de emisión institucional resuelve la viabilidad de distribución; la actualización en cada contacto clínico reduce el riesgo de chips "muertos"; y el semáforo visual transfiere la decisión de confianza en el dato offline al criterio clínico del paramédico.
 
 ---
 
 ## 2. Stack de Red y Descubrimiento
 
-### A) Índice Híbrido Centralizado (Modelo X-Road)
+### A) Índice de Descubrimiento Clínico (Record Locator) + Identidad vía `PatientIdentityProvider`
 
-*   **Rama / Concepto:** Sistemas Distribuidos / Motores de Búsqueda y Enrutamiento.
-*   **¿Qué es?:** Un directorio nacional. No guarda la ficha, solo metadata: `HMAC(RUT, clave_secreta) -> ¿En qué hospital(es) hay datos?`
-*   **Profundización:** A diferencia de una red P2P pura (como un torrent) donde la búsqueda es lenta, el índice central ofrece enrutamiento determinístico pero es inherentemente "stateless-ish" (su estado es reconstruible consultando a los nodos). No guarda datos clínicos. Para evitar ser un SPOF, usa replicación multi-región y caché distribuido en Sidecars. Aunque una falla catastrófica del índice puede degradar temporalmente el *descubrimiento* nacional, no afecta la operación local. Para proteger la identidad, en lugar de un simple hash con salt, se utiliza un HMAC con una clave secreta rotativa gestionada por un KMS, mitigando ataques de fuerza bruta contra el universo predecible de RUTs.
-*   **Justificación:** La consistencia eventual es inaceptable en salud. El índice central garantiza respuestas predecibles.
+*   **Rama / Concepto:** Sistemas Distribuidos / Record Locator Service + Master Patient Index + patrón Adapter / Ports & Adapters.
+*   **Separación crítica:** La **identidad** (quién es el paciente) y el **descubrimiento** (dónde hay datos clínicos) son problemas distintos. El destino de identidad es el [EMPI/MPI del MINSAL](https://interoperabilidad.minsal.cl/docs/componentes-de-la-arquitectura/empi.html) (PIXm/PDQm). El **Índice de Descubrimiento de la MIMF** responde `ID canónico -> nodos/hospitales`.
+*   **Contrato `PatientIdentityProvider`:** Interfaz estable que la malla usa para resolver RUN/ID local, cruzar identificadores, demografía mínima y fusiones. Dos backends:
+    1. **Adaptador temporal (piloto):** misma interfaz; implementación acotada al alcance del piloto (RUN + reglas locales + merge/soporte). Permite avanzar sin bloquearse por el calendario de los IGs draft del MINSAL ([MPI](https://interoperabilidad.minsal.cl/fhir/ig/mpi/), [HPD](https://interoperabilidad.minsal.cl/fhir/ig/hpd/)).
+    2. **EMPI nacional (régimen):** mismo contrato; backend = servicio oficial. Se **reemplaza solo el adaptador**; Record Locator, Sidecar, RVN y TPIM no se reescriben.
+    Regla: acoplamiento al **contrato**, no al despliegue nacional. El adaptador temporal no es un segundo maestro permanente ni un UUID paralelo.
+*   **¿Qué es el Índice MIMF?:** Directorio de enrutamiento clínico. Flujo: `RUT/ID local -> PatientIdentityProvider -> ID canónico -> Record Locator -> ¿en qué hospital(es) hay datos?`.
+*   **Profundización:** Enrutamiento determinístico; estado reconstruible desde nodos; replicación multi-región y caché en Sidecars. Ante latencia/caída del proveedor de identidad: **caché de resoluciones** (`RUN/ID local → ID canónico`, TTL corto) + revalidación al volver. HMAC opcional solo para pseudonimizar claves del locator en reposo.
+*   **Política de cambio de identificadores:** En régimen, fusiones/cambios de RUN las resuelve el EMPI; el locator se reindexa. En piloto, el merge lo gobierna soporte bajo el mismo contrato, con trazabilidad, y se migra al EMPI cuando esté disponible.
+*   **Justificación:** La Ley 21.668 no garantiza que el EMPI esté operativo mañana. Bloquear la malla al calendario nacional hereda su congelamiento. Consumir el EMPI como destino y usar un adaptador temporal permite demostrar valor en piloto sin pelear el estándar futuro. El Record Locator sigue siendo necesario: el EMPI no responde dónde está el historial clínico.
 *   **Alternativas descartadas:**
-    *   *DHT Pura (Kademlia):* Descartada. La latencia de búsqueda impredecible y las "rutas rotas" por nodos inestables lo hacen inviable para escenarios críticos.
+    *   *DHT Pura (Kademlia):* Descartada. Latencia impredecible.
+    *   *RUT como identidad canónica de la red:* Descartado.
+    *   *Usar solo el EMPI como índice de fichas:* Descartado.
+    *   *HMAC(RUT) o UUID MIMF como maestro de identidad:* Descartados.
+    *   *Esperar a que el EMPI/HPD nacionales estén 100% listos antes de cualquier piloto:* Descartado. Es dependencia de calendario, no de arquitectura.
 
 ### B) gRPC + Protocol Buffers
 
 *   **Rama / Concepto:** Redes / Protocolos de Comunicación RPC.
 *   **¿Qué es?:** gRPC es un framework RPC (Remote Procedure Call) de Google. Usa HTTP/2 y Protocol Buffers (binarios) en lugar de JSON para enviar datos.
 *   **Profundización:** Al usar binarios en lugar de texto plano, el payload (peso del mensaje) se reduce drásticamente. Además, HTTP/2 permite multiplexar múltiples peticiones en una sola conexión TCP, reduciendo la latencia de "handshake". Se debe considerar que algunas redes hospitalarias antiguas con proxies o firewalls restrictivos pueden presentar problemas con HTTP/2; para estos casos, la arquitectura debe contemplar un mecanismo de fallback como gRPC-Web (que encapsula sobre HTTP/1.1) o una API REST equivalente para garantizar la conectividad.
-*   **Justificación:** Ofrece menor overhead de red. **Habilitador Crítico NFC:** Además, la altísima compresión de Protobuf es la única tecnología que permite empaquetar un historial vital estructurado dentro de los 888 bytes de memoria de un chip NFC básico, algo que con JSON/texto plano requeriría 3 a 5 veces más espacio.
+*   **Justificación:** Ofrece menor overhead de red en la malla interna. **Habilitador Crítico NFC:** la compresión de Protobuf permite empaquetar el subconjunto ultracrítico del RVN dentro de los ~888 bytes de un chip NFC básico.
 *   **Alternativas descartadas:**
-    *   *API REST (con JSON):* Descartada para la comunicación interna de red por el alto peso de los payloads (texto plano) y la lentitud al serializar/deserializar grandes volúmenes de datos clínicos en comparación con binarios.
+    *   *API REST (con JSON) para el core interno Sidecar↔Hub:* Descartada por peso y latencia frente a binarios.
+    *   *Reemplazar FHIR/REST en el borde MINSAL:* Descartado. La estrategia nacional ([estándares MINSAL](https://interoperabilidad.minsal.cl/docs/especificacion-de-la-arquitectura/estandares-perfiles.html)) usa FHIR R4 sobre REST/JSON hacia EMPI, HPD y terminología. gRPC es complemento interno, no un desafío al estándar oficial.
 
 ### C) Topología Hub-and-Spoke / Relays Controlados
 
@@ -89,10 +106,11 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Rama / Concepto:** Informática Médica / Arquitectura de Datos y Estándares.
 *   **¿Qué es?:** El estándar mundial actual para intercambio de datos de salud. Usa "Recursos" (JSON o XML) con estructuras predefinidas (ej. Patient, Observation).
 *   **Perfil IPS (International Patient Summary):** Un subconjunto mínimo de FHIR (Alergias, Medicamentos, Problemas Activos) diseñado para urgencias.
-*   **Profundización:** Es altamente modular. En lugar de enviar un documento gigante (paradigma antiguo HL7 v3), permite consultar solo el recurso específico necesario (RESTful).
-*   **Justificación:** Evita el "efecto Torre de Babel". Todos los Sidecars traducen la base de datos local a este JSON estándar antes de enviarlo por la red.
+*   **Profundización:** Es altamente modular. En lugar de enviar un documento gigante (paradigma antiguo HL7 v3), permite consultar solo el recurso específico necesario (RESTful). El **Perfil Chile** evoluciona por versiones. Cada Sidecar declara qué versiones soporta y puede operar en **coexistencia** (ej. v3 + v4 + v5). Las versiones antiguas entran en *End-of-Life* tras una ventana anunciada (ej. 6 meses), no con un corte forzado nacional de un día para otro. La negociación de versión ocurre en el handshake entre Sidecars / Hub.
+*   **Justificación:** Evita el "efecto Torre de Babel". Todos los Sidecars traducen la base de datos local a este JSON estándar antes de enviarlo por la red. Forzar "todos a vN mañana" rompería hospitales rezagados; la coexistencia con EOL es el único camino operable a escala país.
 *   **Alternativas descartadas:**
     *   *HL7 v2 / HL7 v3 (CDA):* Descartados por ser estándares antiguos, basados en documentos estáticos pesados (XML rígidos), difíciles de parsear y poco amigables con arquitecturas web modernas.
+    *   *Actualización global forzada inmediata:* Descartada como política operativa. Es correcta como meta de gobernanza, pero peligrosa como mecanismo de despliegue sin ventana de coexistencia.
 
 ### B) SNOMED CT y LOINC (Interoperabilidad Semántica)
 
@@ -108,6 +126,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Rama / Concepto:** Ingeniería de Datos / Procesamiento Batch.
 *   **¿Qué es?:** Extraer (E), Transformar (T) y Cargar (L) datos desde la base legacy hacia una base temporal ultrarrápida (Staging) en formato FHIR. El riesgo de inconsistencia temporal (datos obsoletos) se mitiga con una estrategia de sincronización diferenciada.
 *   **Profundización:** Utiliza un enfoque híbrido: sincronización "near real-time" (vía eventos o micro-batches de minutos) para datos críticos del RVN (ej. nuevas alergias), y procesos Batch nocturnos para el historial profundo. Esta separación es clave para balancear consistencia y rendimiento, asegurando que la información vital esté actualizada sin sobrecargar los sistemas legacy con consultas constantes.
+*   **Contrato de esquema (no automatizar lo imposible):** Si un hospital renombra `Paciente.Nombre` a `Paciente.NombreCompleto`, ningún algoritmo sabe si fue un rename, un split o un cambio semántico. El contrato de interoperabilidad **obliga a informar previamente** cambios estructurales. La actualización del conector la hace soporte MIMF o el proveedor certificado del conector, en paralelo al cambio del hospital. Automatizar la "auto-reparación" del mapeo se descarta: rompería el Sidecar con datos incorrectos silenciosos.
 *   **Justificación (Hardware-Awareness):** Si consultas directamente una base de datos Oracle del año 2008 en medio de una urgencia, la botas. El staging protege la base antigua y garantiza lecturas instantáneas.
 
 ---
@@ -142,10 +161,11 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Ciberseguridad / Gestión de Identidad y Accesos (IAM).
 *   **¿Qué es?:** Control de acceso que no solo evalúa "quién eres" (Rol: Médico), sino el "contexto" (Atributo: ¿Estás de turno? ¿Este paciente tiene cita hoy contigo?).
-*   **Profundización:** Supera al clásico RBAC (Roles) evaluando dinámicamente políticas basadas en Sujeto, Recurso, Acción y Entorno. En la práctica, requiere integración con los sistemas locales de agenda/admisión para obtener los atributos en tiempo real (ej. ¿está de turno?, ¿el paciente ingresó hoy?). Ante la falta de atributos, aplica un fallback conservador "Deny by Default", obligando a usar el protocolo Break-Glass. El principal riesgo operacional es la dependencia de la calidad y disponibilidad de estas fuentes de atributos; si fallan, se corre el riesgo de un aumento en denegaciones incorrectas y un abuso del protocolo Break-Glass como solución informal, convirtiendo una medida de seguridad en una puerta trasera.
-*   **Justificación:** Cumplimiento estricto de la Ley 19.628 (Protección de Datos). Bloquea accesos de personal médico curioso a fichas de famosos o familiares.
+*   **Profundización:** Supera al clásico RBAC (Roles) evaluando dinámicamente políticas basadas en Sujeto, Recurso, Acción y Entorno. En la práctica, requiere integración con los sistemas locales de agenda/admisión/RRHH (y, en terreno, turnos SAMU) para obtener los atributos en tiempo real. El Sidecar y los clientes **solo leen** esos atributos; no escriben ni crean registros en los sistemas del hospital. Ante la falta de atributos, aplica un fallback conservador "Deny by Default", obligando a usar el protocolo Break-Glass. Para no imponer las apps oficiales a todos, la MIMF expone **SDK / API / OAuth** para que un proveedor integre ABAC dentro de su propio EHR. El principal riesgo operacional es la dependencia de la calidad y disponibilidad de estas fuentes de atributos; si fallan, se corre el riesgo de un aumento en denegaciones incorrectas y un abuso del protocolo Break-Glass como solución informal, convirtiendo una medida de seguridad en una puerta trasera.
+*   **Justificación:** Cumplimiento estricto de la Ley 19.628 (Protección de Datos). Bloquea accesos de personal médico curioso a fichas de famosos o familiares. Leer sin escribir reduce la probabilidad de romper sistemas ajenos.
 *   **Alternativas descartadas:**
     *   *RBAC puro (Control por Roles):* Descartado. RBAC dice "todos los médicos pueden ver todo". En salud, eso es una violación de privacidad; el médico solo debe ver la ficha de *sus pacientes actuales*.
+    *   *Forzar una única app clínica nacional:* Descartado. Muchos hospitales querrán integrar el control en su propio software; el SDK/API es el camino de adopción.
 
 ### B) Protocolo Break-Glass ("Romper el cristal")
 
@@ -182,9 +202,11 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 ## 6. Gobernanza, Estrategia Política y de Adopción
 
-*   **Interoperabilidad Forzada:** Basado en la Ley 21.668. Los hospitales y proveedores deben cumplir normativas vinculadas a incentivos y restricciones presupuestarias.
-*   **APIs Obligatorias:** Corta el monopolio ("vendor lock-in") exigiendo a los privados pasar por un Sandbox estatal.
-*   **Estrategia de Transición:** Contempla coexistencia e integración parcial. Si un proveedor grande se niega temporalmente, el sistema no se bloquea; aísla al nodo no conforme, manteniendo el valor de la red para los demás hospitales.
+*   **Interoperabilidad Forzada:** Basado en la Ley 21.668. Los hospitales y proveedores deben cumplir normativas vinculadas a incentivos y restricciones presupuestarias. Quien quiera vender EHR al Estado implementa el Perfil Chile FHIR; no es opcional.
+*   **APIs Obligatorias y Conectores Certificables:** Corta el monopolio ("vendor lock-in") exigiendo a los privados pasar por un Sandbox estatal. El proveedor puede certificar su propio conector bajo `HospitalConnector`, asumiendo la responsabilidad de mantenerlo cuando cambie su esquema interno.
+*   **Contrato de Esquema:** Obligación contractual de notificar cambios estructurales del EHR/base local antes de aplicarlos en producción, para actualizar el conector en paralelo.
+*   **Estrategia de Transición:** Contempla coexistencia e integración parcial, con período de transición explícito (un hospital no puede quedar sin sistema mientras migra). Si un proveedor grande se niega temporalmente, el sistema no se bloquea; aísla al nodo no conforme, manteniendo el valor de la red para los demás hospitales.
+*   **Naturaleza del proyecto:** La MIMF es un **ecosistema / infraestructura nacional** (Sidecar, Record Locator, RVN, TPIM, apps, PKI, KMS, OTA, Sandbox, observabilidad), no "una aplicación". Se alinea y **consume** componentes oficiales del MINSAL ([Arquitectura Nacional](https://interoperabilidad.minsal.cl/docs/especificacion-de-la-arquitectura/arquitectura.html)): EMPI/MPI, HPD y Servicios Terminológicos vía el NID; no los reemplaza. Hasta que esos servicios estén operativos en terreno, opera con adaptadores temporales detrás de contratos estables (`PatientIdentityProvider`, y HPD cuando aplique).
 
 ---
 
@@ -215,7 +237,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 ## 9. Glosario / Diccionario de Términos
 
 *   **ABAC (Attribute-Based Access Control):** Control de acceso dinámico basado en atributos y contexto (ej. turno del médico, relación con el paciente), superior al clásico rol estático.
-*   **API REST:** Interfaz de programación que usa HTTP y texto plano (JSON/XML). En la MIMF se descarta para el core de red a favor de gRPC por temas de peso y latencia.
+*   **API REST:** Interfaz HTTP + JSON/XML. En la MIMF se descarta para el *core interno* Sidecar↔Hub a favor de gRPC; se mantiene obligatoria en el borde hacia componentes oficiales MINSAL (EMPI, HPD, terminología) bajo FHIR R4.
 *   **Appliance:** Dispositivo o software preconfigurado (como el Sidecar) que se despliega "llave en mano" y es gestionado centralizadamente sin que el cliente local lo modifique.
 *   **Backpressure / Rate Limiting:** Mecanismo de control de flujo que limita la cantidad de peticiones concurrentes para evitar que un sistema legacy colapse por sobrecarga.
 *   **Break-Glass ("Romper el cristal"):** Protocolo de seguridad que permite saltar controles de acceso (ABAC) en casos de riesgo vital, dejando una estricta traza de auditoría.
@@ -225,15 +247,20 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **DHT (Distributed Hash Table):** Patrón P2P (como Kademlia) descartado para la MIMF por sus tiempos de respuesta y latencia impredecibles al buscar información crítica.
 *   **Edge Caching:** Almacenamiento temporal de datos de red lo más cerca posible del consumidor final (caché local del Sidecar) para mitigar la latencia de internet.
 *   **EHR (Electronic Health Record):** Ficha Clínica Electrónica. El software principal que utiliza el hospital para gestionar a los pacientes.
+*   **EMPI / MPI (Enterprise Master Patient Index):** Componente oficial del MINSAL para identidad demográfica unívoca del paciente. Destino definitivo del `PatientIdentityProvider`. Ver [EMPI](https://interoperabilidad.minsal.cl/docs/componentes-de-la-arquitectura/empi.html) e [IG MPI](https://interoperabilidad.minsal.cl/fhir/ig/mpi/).
 *   **ETL / Staging:** Proceso de Extraer, Transformar y Cargar datos desde una base de datos antigua a una temporal (Staging Area) en formato FHIR para lecturas ultrarrápidas.
-*   **FHIR (Fast Healthcare Interoperability Resources):** Estándar médico internacional moderno de HL7 basado en "recursos" web (JSON) para interoperabilidad en salud.
-*   **gRPC:** Framework RPC de Google que emplea HTTP/2 y Protocol Buffers (binarios) logrando un intercambio de red inmensamente más rápido y liviano que las APIs REST.
-*   **HA (High Availability) / SLA:** Alta Disponibilidad de un sistema, garantizada por un Acuerdo de Nivel de Servicio (ej. 99.9% de uptime o tiempo encendido).
-*   **HL7 (Health Level Seven):** Organización internacional y conjunto de estándares históricos (v2, v3, CDA) para el intercambio de información clínica.
-*   **Hub-and-Spoke / Relay:** Topología de red donde los nodos (hospitales) se comunican mediante un intermediario gestionado, solucionando bloqueos de firewalls institucionales.
-*   **Índice Nacional de Descubrimiento (X-Road):** Directorio central "stateless" que mapea (vía hashes) en qué hospitales existen datos de un RUT, sin guardar la ficha clínica.
-*   **IPS (International Patient Summary):** Subconjunto estandarizado de FHIR enfocado en información vital mínima (alergias, medicamentos, diagnósticos) para atención no programada.
-*   **KMS (Key Management Service):** Sistema central que administra de forma segura las claves y "salts" criptográficos usados en el Índice Nacional.
+*   **FHIR (Fast Healthcare Interoperability Resources):** Estándar médico internacional moderno de HL7. El MINSAL adopta **FHIR R4** como estándar sintáctico nacional.
+*   **gRPC:** Framework RPC de Google (HTTP/2 + Protocol Buffers). En la MIMF se usa en la malla interna; no reemplaza FHIR/REST hacia el Estado.
+*   **HA (High Availability) / SLA:** Alta Disponibilidad de un sistema, garantizada por un Acuerdo de Nivel de Servicio (ej. 99.9% de uptime).
+*   **HL7 (Health Level Seven):** Organización internacional y conjunto de estándares (v2, v3, CDA, FHIR) para el intercambio de información clínica.
+*   **HPD (Healthcare Provider Directory):** Directorio nacional de prestadores. Enchufable a ABAC cuando esté operativo; no bloquea el piloto. Ver [IG HPD](https://interoperabilidad.minsal.cl/fhir/ig/hpd/).
+*   **HospitalConnector:** Interfaz oficial de conectores de la MIMF hacia un EHR.
+*   **Hub-and-Spoke / Relay:** Topología de red con intermediario gestionado.
+*   **Índice Nacional de Descubrimiento / Record Locator:** Directorio MIMF `ID canónico -> hospitales con datos clínicos`. No es el EMPI.
+*   **IPS (International Patient Summary):** Subconjunto FHIR de información vital mínima para atención no programada.
+*   **KMS (Key Management Service):** Gestión de claves criptográficas (incl. pseudonimización opcional del locator).
+*   **NID (Núcleo de Interoperabilidad de Datos):** Guía/núcleo MINSAL (MPI + HPD) y casos transversales.
+*   **PatientIdentityProvider:** Contrato estable de identidad de paciente en la MIMF. Backend temporal (piloto) o EMPI nacional (régimen); se intercambia el adaptador sin reescribir la malla.
 *   **Lazy Loading (Carga Progresiva):** Estrategia de red y UI donde la carga pesada (historial profundo) solo se descarga desde los hospitales remotos si el médico lo pide explícitamente.
 *   **Legacy System (Sistema Legado):** Sistemas antiguos, frágiles pero críticos, que actualmente operan en los hospitales y que la MIMF integra sin intentar reemplazar de golpe.
 *   **LOINC:** Estándar internacional enfocado en la codificación de pruebas, mediciones y observaciones de laboratorio clínico.
@@ -246,16 +273,17 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **OTA (Over-The-Air):** Actualizaciones enviadas de forma remota. El Estado actualiza los Sidecars OTA sin requerir personal TI en cada hospital rural.
 *   **Protocol Buffers (Protobuf):** Mecanismo de Google para serializar datos estructurados en formato binario, siendo mucho más pequeño y veloz de transmitir que el XML o JSON.
 *   **RBAC (Role-Based Access Control):** Control de acceso básico según "cargo" (ej. "Rol Médico"). Insuficiente en salud por violar la privacidad de atenciones no asignadas.
-*   **RVN (Resumen Vital Nacional):** Componente central de la MIMF. Repositorio de respuesta inmediata (< 3s) que contiene alergias, medicamentos y diagnósticos críticos.
+*   **RVN (Resumen Vital Nacional):** Componente central de la MIMF. Repositorio de respuesta inmediata (< 3s) con alergias, medicamentos y diagnósticos críticos. Actúa como alerta de urgencia, no como ficha clínica nacional.
 *   **Salt:** Texto aleatorio añadido a un dato antes de aplicar una función hash criptográfica, evitando ataques de reidentificación de RUTs o fuerza bruta.
-*   **Sandbox Estatal:** Entorno de pruebas técnico obligatorio donde los proveedores privados de software demuestran que cumplen el estándar antes de venderle al Estado.
-*   **Sidecar (Patrón):** Arquitectura donde un agente auxiliar (Sidecar) se despliega junto a un sistema base para interceptar, traducir y enrutar datos sin modificar el código legacy.
+*   **Sandbox Estatal:** Entorno de pruebas técnico obligatorio donde los proveedores privados de software demuestran que cumplen el estándar (y, si aplica, certifican su conector) antes de venderle al Estado.
+*   **Sidecar (Patrón):** Arquitectura donde un agente auxiliar se despliega junto a un sistema base para interceptar, traducir y enrutar datos sin modificar el código legacy. En la MIMF se compila por hospital (Core + conector específico).
+*   **Snapshot + Replay:** Estrategia de reincorporación tras desconexiones prolongadas: se sincroniza un estado base (snapshot) y luego se reproducen eventos pendientes a tasa controlada.
 *   **SIDRA:** Sistemas de Información de la Red Asistencial. Estrategia histórica en Chile que logró digitalizar hospitales, pero generó "islas digitales" inconexas.
 *   **SNOMED CT:** Nomenclatura médica mundial de terminología clínica (diagnósticos, hallazgos). Permite que la interoperabilidad sea semánticamente idéntica.
 *   **Soft Merge (Datos Reconciliados):** Enfoque que muestra versiones conflictivas de un diagnóstico (con fechas y orígenes) para que el médico decida, sin borrar registros ajenos.
 *   **SPOF (Single Point of Failure):** Punto Único de Fallo. Componente que, de caer, apaga toda la red. La MIMF lo evita replicando el Índice y usando cachés de emergencia.
 *   **TLS 1.3:** Protocolo criptográfico de transporte que cifra de manera robusta los datos médicos mientras viajan por internet ("cifrado en tránsito").
 *   **TPIM (Token Físico de Identidad Médica):** Componente NFC de la MIMF portado por el paciente. Almacena offline un resumen vital codificado en Protobuf para emergencias de primeros respondedores.
-*   **TTL (Time To Live):** Tiempo de vida útil de un dato almacenado en el caché antes de forzar al sistema a ir a buscar la versión más nueva al hospital de origen.
+*   **TTL (Time To Live):** Tiempo de vida útil de un dato almacenado en el caché antes de forzar al sistema a ir a buscar la versión más nueva al hospital de origen (o a revalidar una resolución EMPI cacheada).
 *   **Vendor Lock-in (Cautividad):** Cuando una empresa o Estado queda atrapado con un solo proveedor de software porque el costo y formato de extracción de datos hace inviable migrar.
 *   **WORM (Write Once, Read Many) / Log Inmutable:** Base de datos de auditoría temporal donde los accesos se registran como bloques añadidos al final, impidiendo alteraciones forenses.
