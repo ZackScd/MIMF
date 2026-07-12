@@ -50,7 +50,9 @@ Estonia no utiliza un software único, sino una arquitectura distribuida (*Distr
 **El Triángulo de Seguridad (PKI):**
 1. **Autenticación Mutua:** Los servidores verifican sus identidades mediante certificados digitales antes de comunicarse.
 2. **Confidencialidad:** Cifrado extremo a extremo. El administrador central no puede leer los datos.
-3. **Integridad y No Repudio:** Uso de *KSI Blockchain* y *Timestamps*. Todo mensaje es firmado digitalmente, haciendo los logs inalterables y válidos como prueba judicial.
+3. **Integridad y No Repudio:** Uso de **KSI** (*Keyless Signature Infrastructure* — cadena de hashes con sellado temporal por entidad de confianza, Guardtime). En la literatura de X-Road se comercializa como "KSI Blockchain", pero **no** es un blockchain público con consenso distribuido tipo Bitcoin/Ethereum. Todo mensaje es firmado digitalmente, haciendo los logs inalterables y válidos como prueba judicial.
+
+*Nota técnica (MIMF):* La MIMF adopta un enfoque **análogo** en auditoría (logs WORM + hashing tipo Merkle) y descarta solo el consenso blockchain distribuido — ver `02_conceptos_y_tecnologias.md` §5.C.
 
 **Sinergia X-Road y HL7 FHIR (El Idioma vs. La Carretera):**
 Un error común es confundir el transporte con el contenido. X-Road provee la "carretera" (transporte seguro e identidad), pero se requiere un "idioma" común para que los sistemas se entiendan automáticamente. Ese idioma es **HL7 FHIR**. El Servidor de Seguridad toma un recurso FHIR, lo envuelve en la seguridad de X-Road y lo entrega al destino.
@@ -63,6 +65,7 @@ Un error común es confundir el transporte con el contenido. X-Road provee la "c
 En mayo de 2024, se publicó la **Ley N.º 21.668**, que obliga legalmente a la interoperabilidad de las fichas clínicas entre prestadores públicos y privados.
 
 * **Situación 2025-2026:** El MINSAL se encuentra definiendo el reglamento técnico. El debate ya no es *si* se debe compartir, sino *cómo* hacerlo sin comprometer la ciberseguridad (activos críticos nacionales) ni afectar el rendimiento clínico.
+* **Atraso normativo (jul 2026):** El reglamento del art. 13 debía publicarse en ~18 meses desde mayo 2024 (~noviembre 2025) y **aún no aparece** (~8 meses de retraso). Refuerza la tesis de gobernanza inestable (§2) y justifica el patrón MIMF de **adaptador temporal + contrato estable** en lugar de esperar al calendario estatal (detalle en `04_legal.md` §2.1).
 * **Esfuerzos del Ecosistema:** Instituciones como el CENS (Centro Nacional en Sistemas de Información en Salud) y HL7 Chile están validando guías de implementación (ej. *FHIR Connectathon 2026*).
 * **El Riesgo de la Brecha Digital:** Existe incertidumbre sobre si los prestadores más pequeños (consultorios rurales) tendrán el subsidio y la capacidad técnica para implementar estos nodos, arriesgando crear pacientes de "primera y segunda categoría".
 

@@ -223,8 +223,10 @@ Manejar situaciones de emergencia (ej. paciente inconsciente) donde los controle
 #### Decisión y Beneficios (Break-Glass)
 La seguridad informática nunca debe comprometer la vida de un paciente. Este protocolo permite un acceso de emergencia controlado, temporal y justificado, garantizando la continuidad de la atención.
 
+**Base legal (cita para comisión):** Ley 20.584 (acceso del profesional que participa **directamente** en la atención) + Ley 21.668 (continuidad del cuidado) + **art. 16 bis Ley 21.719** — tratamiento de datos de salud **sin consentimiento** cuando es indispensable para salvaguardar la **vida o integridad** del titular (letra a), informar al cesar el impedimento) o para **prestación de asistencia sanitaria** (letra e). Texto literal y desarrollo en `04_legal.md` §2.3.2.
+
 #### Sacrificio (Trade-off)
-Introduce una excepción controlada a la seguridad. Requiere obligatoriamente mecanismos de auditoría no alterables (WORM logs) y monitoreo para disuadir y sancionar el abuso.
+Introduce una excepción controlada a la seguridad. Requiere obligatoriamente mecanismos de auditoría no alterables (WORM logs), notificación al titular cuando corresponda (21.719) y monitoreo para disuadir y sancionar el abuso.
 
 ---
 
@@ -335,6 +337,8 @@ Doble zona NDEF: zona pública en **texto plano** (lectura nativa por cualquier 
 #### Sacrificio (Trade-off)
 La zona pública expone intencionalmente la condición del paciente (consentimiento explícito). El chip puede quedar desactualizado; el semáforo 🟢🟡🔴 mitiga percepción, no elimina el riesgo. Quien no tiene celular/internet/contacto clínico queda fuera de la autogestión — el sistema hace *fallback* al protocolo de trauma; el chip es acelerador, no bloqueador.
 
+**Regulatorio (comisión):** Si preguntan si el TPIM o la App de Primeros Respondedores son dispositivo médico / SaMD regulado por el ISP, ver **§18** y `04_legal.md` §2.6.
+
 ---
 
 ## 16. Interfaz de Conectores Certificables vs. Equipo Único Nacional
@@ -379,6 +383,37 @@ Algunos clínicos querrán más campos "por si acaso". La gobernanza del comité
 
 ---
 
+## 18. Clasificación ISP / SaMD vs. Infraestructura de Interoperabilidad
+
+#### Conceptos a Estudiar
+Software as a Medical Device (SaMD), dispositivos médicos (ISP Chile), IEC 62304, ISO 14971, infraestructura de información en salud (SIH), registro sanitario.
+
+#### Problema a Resolver
+Responder si la **App de Primeros Respondedores** y el **TPIM** (zona privada con datos clínicos codificados) quedan bajo fiscalización del **Instituto de Salud Pública (ISP)** como dispositivo médico o SaMD — y qué implica eso para el cronograma y el diseño.
+
+#### Alternativas
+*   **Asumir que no son dispositivo médico** y omitir trazabilidad regulatoria (riesgo de bloqueo en despliegue masivo).
+*   **Diseñar todo el ecosistema como SaMD clase C** desde el día uno (sobre-ingeniería y costo en Sidecar/Hub/Índice, que son infraestructura).
+*   **Diseño condicional por componente + consulta ISP antes de rollout masivo (Opción elegida).**
+
+#### Decisión y Beneficios (diseño condicional)
+La clasificación regulatoria **no está resuelta** al corte jul 2026. La MIMF separa componentes:
+
+| Componente | Postura probable | Estándar condicional |
+| ---------- | ---------------- | -------------------- |
+| Sidecar, Hub, Índice, RVN | **SIH / infraestructura** — no SaMD autónomo | ISO 27001 / 27799 |
+| App Primeros Respondedores | Posible **SaMD** | IEC 62304 + ISO 14971 |
+| TPIM (zona privada clínica) | Posible **dispositivo médico** si se comercializa como producto sanitario | IEC 62304 + ISO 14971 |
+
+**Respuesta rápida para comisión:** *"No lo declaramos resuelto. El RVN actúa como **alerta de urgencia**, no como prescripción autónoma; Break-Glass está acotado y auditado. Diseñamos con trazabilidad requisitos→tests por si el ISP clasifica App o TPIM como regulados, pero **consulta formal ISP** es pendiente antes de comercialización o despliegue masivo — igual que el reglamento 21.668."*
+
+Marco legal completo: `04_legal.md` §2.6 · Estándares: `05_estandares.md` §4.
+
+#### Sacrificio (Trade-off)
+Una clasificación ISP restrictiva puede alargar plazos (registro sanitario, ensayos, documentación 62304). El piloto académico/arquitectónico puede avanzar; el **rollout nacional** de App Respondedores y TPIM como producto no debe prometerse sin esa decisión. Mitigar no es lo mismo que eximir: las mitigaciones de diseño reducen presión regulatoria, no sustituyen la consulta ISP.
+
+---
+
 ## Orden de Estudio y Preparación de Defensa
 
 1.  **Fundamentos:** Arquitectura distribuida e híbrida federada; RVN como alerta (no ficha nacional).
@@ -390,3 +425,4 @@ Algunos clínicos querrán más campos "por si acaso". La gobernanza del comité
 7.  **Resiliencia operativa:** Cache, Circuit Breaker, mitigación de SPOF, snapshot + replay tras desconexiones largas.
 8.  **Edge / Pre-Hospitalario:** NDEF nativo (sin app de civiles), App Paciente, App Primeros Respondedores, TPIM offline.
 9.  **Alineación estatal:** Arquitectura híbrida MINSAL, NID (MPI+HPD), Servicios Terminológicos, FHIR R4 en el borde; acoplamiento a contrato, no a calendario.
+10. **Regulatorio (ISP / SaMD):** Clasificación pendiente de App Respondedores y TPIM — §18; marco legal `04_legal.md` §2.6.

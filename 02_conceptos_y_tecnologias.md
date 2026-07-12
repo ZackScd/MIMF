@@ -70,7 +70,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
     2. **EMPI nacional (régimen):** mismo contrato; backend = servicio oficial. Se **reemplaza solo el adaptador**; Record Locator, Sidecar, RVN y TPIM no se reescriben.
     Regla: acoplamiento al **contrato**, no al despliegue nacional. El adaptador temporal no es un segundo maestro permanente ni un UUID paralelo.
 *   **¿Qué es el Índice MIMF?:** Directorio de enrutamiento clínico. Flujo: `RUT/ID local -> PatientIdentityProvider -> ID canónico -> Record Locator -> ¿en qué hospital(es) hay datos?`.
-*   **Profundización:** Enrutamiento determinístico; estado reconstruible desde nodos; replicación multi-región y caché en Sidecars. Ante latencia/caída del proveedor de identidad: **caché de resoluciones** (`RUN/ID local → ID canónico`, TTL corto) + revalidación al volver. HMAC opcional solo para pseudonimizar claves del locator en reposo.
+*   **Profundización:** Enrutamiento determinístico; estado reconstruible desde nodos; replicación multi-región y caché en Sidecars. Ante latencia/caída del proveedor de identidad: **caché de resoluciones** (`RUN/ID local → ID canónico`, TTL corto) + revalidación al volver. **HMAC** opcional solo para pseudonimizar claves del locator en reposo: la clave secreta proviene del **KMS** (rol de *pepper* en HMAC; ver glosario *Salt / clave HMAC*).
 *   **Política de cambio de identificadores:** En régimen, fusiones/cambios de RUN las resuelve el EMPI; el locator se reindexa. En piloto, el merge lo gobierna soporte bajo el mismo contrato, con trazabilidad, y se migra al EMPI cuando esté disponible.
 *   **Justificación:** La Ley 21.668 no garantiza que el EMPI esté operativo mañana. Bloquear la malla al calendario nacional hereda su congelamiento. Consumir el EMPI como destino y usar un adaptador temporal permite demostrar valor en piloto sin pelear el estándar futuro. El Record Locator sigue siendo necesario: el EMPI no responde dónde está el historial clínico.
 *   **Alternativas descartadas:**
@@ -179,10 +179,10 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Ciberseguridad / Auditoría, Compliance y Análisis Forense.
 *   **¿Qué es?:** Una base de datos (o archivo) donde solo se pueden "agregar" (append) eventos. No permite UPDATE ni DELETE. Además, lleva un sello de tiempo y firma criptográfica.
-*   **Profundización:** Concepto WORM (Write Once, Read Many). Usa hashing criptográfico (como el árbol de Merkle) para asegurar que si un administrador de bases de datos borra un registro, la cadena completa se invalida. Dado el volumen masivo de eventos, se debe implementar una estrategia de ciclo de vida de datos que contemple el archivado en almacenamiento de bajo costo (cold storage) y sistemas de indexación eficientes para permitir búsquedas forenses sin degradar el rendimiento.
+*   **Profundización:** Concepto WORM (Write Once, Read Many). Usa hashing criptográfico (cadena tipo **Merkle**) para asegurar que si un administrador de bases de datos borra un registro, la cadena completa se invalida — enfoque análogo al **KSI** de X-Road/Estonia (hash-chaining + timestamping con entidad de confianza), no a un blockchain con consenso distribuido. Dado el volumen masivo de eventos, se debe implementar una estrategia de ciclo de vida de datos que contemple el archivado en almacenamiento de bajo costo (cold storage) y sistemas de indexación eficientes para permitir búsquedas forenses sin degradar el rendimiento.
 *   **Justificación:** Trazabilidad legal. Si hay una demanda por negligencia o filtración (Ley 21.668), el Ministerio de Salud necesita pruebas irrefutables de quién vio qué.
 *   **Alternativas descartadas:**
-    *   *Blockchain / Smart Contracts:* Descartado rotundamente por vender humo. Introduce latencia, altos costos computacionales de consenso y complejidad innecesaria para un entorno donde el Estado ya actúa como entidad central de confianza.
+    *   *Blockchain público con consenso distribuido (Bitcoin/Ethereum) y Smart Contracts:* Descartado. Introduce latencia, altos costos computacionales de consenso y complejidad innecesaria cuando el Estado ya actúa como entidad central de confianza. **No confundir** con KSI (hash-chaining + timestamping) ni con el Merkle de los logs WORM anteriores — ver `00_investigacion.md` (triángulo de seguridad X-Road).
 
 ### D) Cifrado y Protección en Tránsito
 
@@ -194,7 +194,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Rama / Concepto:** Seguridad Física e Integridad de Dispositivos Periféricos.
 *   **¿Qué es?:** Mecanismos para evitar clonación, alteración o lectura maliciosa de los chips de pacientes.
 *   **Profundización:** 
-    1. **Cifrado Semántico:** La Zona Privada usa SNOMED CT (números incomprensibles sin la base de datos oficial).
+    1. **Codificación semántica (SNOMED CT):** La Zona Privada codifica diagnósticos y alergias en SNOMED CT en lugar de texto plano. Reduce la legibilidad casual en una captura NFC, pero **no es cifrado** ni control de confidencialidad (las tablas son públicas/licenciables). La protección real es la **firma PKI** (punto 2) y el **ABAC** (punto 3).
     2. **Firma Criptográfica:** El Protobuf está firmado (PKI) por el RVN Central para invalidar chips adulterados.
     3. **ABAC en App Móvil:** La lectura de la Zona Privada exige que el paramédico autenticado esté **de turno activo** en el sistema. Si está fuera de turno, la lectura se bloquea para evitar espionaje.
     4. **Break-Glass Móvil:** Si un médico fuera de turno interviene en un accidente real, puede forzar la lectura activando el Break-Glass en la App. La auditoría de este evento (GPS, usuario, motivo) se almacena de forma segura en el dispositivo móvil y se sincroniza con el servidor central en cuanto recupera la conectividad, garantizando la trazabilidad incluso en escenarios offline.
@@ -240,7 +240,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **ABAC (Attribute-Based Access Control):** Control de acceso dinámico basado en atributos y contexto (ej. turno del médico, relación con el paciente), superior al clásico rol estático.
 *   **API REST:** Interfaz HTTP + JSON/XML. Obligatoria hacia componentes MINSAL (EMPI, HPD, terminología) bajo FHIR R4. En la malla interna del camino crítico de urgencia se descarta a favor de gRPC; REST hacia el Estado corre en background o solo en *cache-miss*.
 *   **App Paciente / Autogestión:** App oficial con Clave Única. Actualiza el TPIM del titular (payload firmado del RVN vía NFC del celular) y configura/consiente la zona pública. No es app de transeúntes.
-*   **App de Primeros Respondedores:** App oficial SAMU/Bomberos. Lee zona privada del TPIM con ABAC y Break-Glass.
+*   **App de Primeros Respondedores:** App oficial SAMU/Bomberos. Lee zona privada del TPIM con ABAC y Break-Glass. Clasificación ISP/SaMD **pendiente** — ver `03_guia_defensa_arquitectura.md` §18.
 *   **Appliance:** Dispositivo o software preconfigurado (como el Sidecar) que se despliega "llave en mano" y es gestionado centralizadamente sin que el cliente local lo modifique.
 *   **Backpressure / Rate Limiting:** Mecanismo de control de flujo que limita la cantidad de peticiones concurrentes para evitar que un sistema legacy colapse por sobrecarga.
 *   **Break-Glass ("Romper el cristal"):** Protocolo de seguridad que permite saltar controles de acceso (ABAC) en casos de riesgo vital, dejando una estricta traza de auditoría.
@@ -278,7 +278,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Protocol Buffers (Protobuf):** Mecanismo de Google para serializar datos estructurados en formato binario, siendo mucho más pequeño y veloz de transmitir que el XML o JSON.
 *   **RBAC (Role-Based Access Control):** Control de acceso básico según "cargo" (ej. "Rol Médico"). Insuficiente en salud por violar la privacidad de atenciones no asignadas.
 *   **RVN (Resumen Vital Nacional):** Componente central de la MIMF. Repositorio de respuesta inmediata (< 3s) con alergias, medicamentos y diagnósticos críticos. Actúa como alerta de urgencia, no como ficha clínica nacional.
-*   **Salt:** Texto aleatorio añadido a un dato antes de aplicar una función hash criptográfica, evitando ataques de reidentificación de RUTs o fuerza bruta.
+*   **Salt / clave HMAC (locator):** En la pseudonimización opcional del Record Locator, el **HMAC** usa una clave secreta del **KMS** (función de *pepper*). No es un salt aleatorio por registro documentado aparte; cumple el mismo rol de evitar reidentificación y ataques de diccionario sobre claves del índice.
 *   **Sandbox Estatal:** Entorno de pruebas técnico obligatorio donde los proveedores privados de software demuestran que cumplen el estándar (y, si aplica, certifican su conector) antes de venderle al Estado.
 *   **Sidecar (Patrón):** Arquitectura donde un agente auxiliar se despliega junto a un sistema base para interceptar, traducir y enrutar datos sin modificar el código legacy. En la MIMF se compila por hospital (Core + conector específico).
 *   **Snapshot + Replay:** Estrategia de reincorporación tras desconexiones prolongadas: se sincroniza un estado base (snapshot) y luego se reproducen eventos pendientes a tasa controlada.
@@ -287,7 +287,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Soft Merge (Datos Reconciliados):** Enfoque que muestra versiones conflictivas de un diagnóstico (con fechas y orígenes) para que el médico decida, sin borrar registros ajenos.
 *   **SPOF (Single Point of Failure):** Punto Único de Fallo. Componente que, de caer, apaga toda la red. La MIMF lo evita replicando el Índice y usando cachés de emergencia.
 *   **TLS 1.3:** Protocolo criptográfico de transporte que cifra de manera robusta los datos médicos mientras viajan por internet ("cifrado en tránsito").
-*   **TPIM (Token Físico de Identidad Médica):** Componente NFC de la MIMF portado por el paciente. Almacena offline un resumen vital codificado en Protobuf para emergencias de primeros respondedores.
+*   **TPIM (Token Físico de Identidad Médica):** Componente NFC de la MIMF portado por el paciente. Almacena offline un resumen vital codificado en Protobuf para emergencias de primeros respondedores. Posible dispositivo médico ante ISP — ver `03_guia_defensa_arquitectura.md` §18.
 *   **TTL (Time To Live):** Tiempo de vida útil de un dato almacenado en el caché antes de forzar al sistema a ir a buscar la versión más nueva al hospital de origen (o a revalidar una resolución EMPI cacheada).
 *   **Vendor Lock-in (Cautividad):** Cuando una empresa o Estado queda atrapado con un solo proveedor de software porque el costo y formato de extracción de datos hace inviable migrar.
 *   **WORM (Write Once, Read Many) / Log Inmutable:** Base de datos de auditoría temporal donde los accesos se registran como bloques añadidos al final, impidiendo alteraciones forenses.

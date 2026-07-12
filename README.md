@@ -26,6 +26,8 @@ Para leer esta wea, empieza por `01_proyecto.md` y después baja a `02` / `03` c
 | [`01_proyecto.md`](01_proyecto.md) | La propuesta propiamente tal. Tesis, anti-objetivos, componentes, flujos clínicos (urgencia + NFC), seguridad, operación y gobernanza. Es el documento "ejecutivo" del proyecto. |
 | [`02_conceptos_y_tecnologias.md`](02_conceptos_y_tecnologias.md) | Justificación técnica profunda. Qué es cada pieza, por qué se eligió, qué se descartó, stack sugerido para PoC y glosario. |
 | [`03_guia_defensa_arquitectura.md`](03_guia_defensa_arquitectura.md) | Manual de defensa. Cada decisión con el formato: problema → alternativas → beneficios → trade-off. Útil para comisiones, ramos y cuando alguien diga "¿y por qué no REST?". |
+| [`04_legal.md`](04_legal.md) | Marco legal y normativo: leyes (21.668, 20.584, 19.628/21.719, 21.663), ecosistema MINSAL (EMPI, HPD, NID, FHIR, TEI, SNRE), proyectos asociados y matriz de cumplimiento MIMF. |
+| [`05_estandares.md`](05_estandares.md) | Estándares técnicos: ISO/IEC (27001, 27701, 25010, 12207…), NCh, OWASP, IEC 62304, calidad de software y matriz por componente MIMF. Complementa `04` (ley) y `02` (FHIR/gRPC). |
 | [`Informes/`](Informes/) | Informes académicos presentados en la universidad (entregas, evaluaciones, retroalimentaciones). No son la arquitectura "viva"; son evidencia de proceso del ramo. |
 | `README.md` | Este archivo. |
 
@@ -37,6 +39,8 @@ Para leer esta wea, empieza por `01_proyecto.md` y después baja a `02` / `03` c
 2. `01_proyecto.md` — para entender *qué* propone MIMF
 3. `02_conceptos_y_tecnologias.md` — para el *cómo* y el *por qué técnico*
 4. `03_guia_defensa_arquitectura.md` — para sobrevivir preguntas difíciles
+5. `04_legal.md` — para el marco legal, MINSAL y cómo MIMF cumple o se acopla
+6. `05_estandares.md` — para ISO, OWASP, calidad SW y certificación técnica
 
 ---
 
@@ -201,7 +205,7 @@ Se descartó UUID/HMAC(RUT) como maestro de identidad. HMAC, si se usa, solo pse
 
 Si van a editar docs:
 
-- mantengan el tono técnico y el formato de listas / secciones que ya usan `00`–`03`
+- mantengan el tono técnico y el formato de listas / secciones que ya usan `00`–`05`
 - en `03`, cualquier decisión nueva debería caber en el molde **problema → alternativas → beneficios → trade-off**
 
 Pendiente razonable a futuro: un **Runbook Nacional** con escenarios operativos a 10 años (ransomware, rotación PKI, hospital offline 72h, terremoto regional, etc.).
