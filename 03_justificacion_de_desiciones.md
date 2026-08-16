@@ -1,17 +1,18 @@
 # Guía de Defensa de Arquitectura: Decisiones, Alternativas y Justificación
 
-> **Regla Fundamental:** Para justificar cualquier decisión en la defensa, se debe responder estructuradamente a estas cuatro premisas para cada concepto:
+> **Regla Fundamental:** Para justificar cualquier decisión de diseño, se debe responder estructuradamente a estas cuatro premisas para cada concepto:
 >
 > 1. ¿Qué problema resuelve?
 > 2. ¿Qué alternativas existían?
 > 3. ¿Qué beneficios aporta la opción elegida?
 > 4. ¿Qué se sacrifica (trade-off) al optar por esta solución?
 
+
 ---
 
 ## 1. Centralizado vs. Federado
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Arquitectura centralizada vs federada, Sistemas distribuidos, Data sovereignty (Soberanía de datos), Master data vs Source systems.
 
@@ -45,7 +46,7 @@ Incrementa la complejidad del diseño arquitectónico, exige una gobernanza téc
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Patrones (Sidecar, Adapter, API Gateway, Plugin architecture), Enterprise Service Bus (ESB) y Middleware.
 
@@ -79,7 +80,7 @@ Aumenta la superficie de componentes desplegados. Requiere mecanismos robustos p
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Topologías de red (Peer-to-Peer, Hub-and-Spoke, Mesh pura), NAT traversal y arquitectura Relay, Message Brokers.
 
@@ -112,7 +113,7 @@ Genera una dependencia hacia una infraestructura de red intermedia. El Relay pue
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Protocolos y arquitecturas (REST, gRPC, GraphQL, SOAP), Comparativas de rendimiento (HTTP/1.1 vs HTTP/2 y RPC).
 
@@ -145,7 +146,7 @@ Se sacrifica la legibilidad humana directa de los *payloads*. Requiere disciplin
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Formatos de serialización de datos (JSON, XML, Protobuf, Avro, MessagePack, CBOR).
 
@@ -178,7 +179,7 @@ No permite inspección visual nativa (requiere herramientas para decodificar). D
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Evolución de los estándares médicos (HL7 v2, HL7 v3, CDA, FHIR), openEHR.
 
@@ -211,7 +212,7 @@ FHIR establece la sintaxis, pero no resuelve la semántica por sí solo. Requier
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Interoperabilidad semántica, SNOMED CT, LOINC, CIE-10 / CIE-11.
 
@@ -244,7 +245,7 @@ Impone un alto costo inicial de mapeo semántico ("cross-mapping") en cada hospi
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Patrones de integración de datos (ETL, ELT, Staging area), Change Data Capture (CDC), Materialized views.
 
@@ -277,7 +278,7 @@ Los datos en el *staging* presentan un desfase temporal. Este riesgo se mitiga, 
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Modelos de control de accesos (RBAC, ABAC, DAC, MAC, ReBAC).
 
@@ -308,7 +309,7 @@ Incrementa la complejidad y depende críticamente de la disponibilidad y calidad
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Sistemas de acceso en emergencias de salud, Protocolo Break-glass, emergency override, audit logging forense.
 
@@ -328,7 +329,7 @@ Manejar situaciones de emergencia (ej. paciente inconsciente) donde los controle
 
 La seguridad informática nunca debe comprometer la vida de un paciente. Este protocolo permite un acceso de emergencia controlado, temporal y justificado, garantizando la continuidad de la atención.
 
-**Base legal (cita para comisión):** Ley 20.584 (acceso del profesional que participa **directamente** en la atención) + Ley 21.668 (continuidad del cuidado) + **art. 16 bis Ley 21.719** — tratamiento de datos de salud **sin consentimiento** cuando es indispensable para salvaguardar la **vida o integridad** del titular (letra a), informar al cesar el impedimento) o para **prestación de asistencia sanitaria** (letra e). Texto literal y desarrollo en `04_legal.md` §2.3.2.
+**Base legal:** Ley 20.584 (acceso del profesional que participa **directamente** en la atención) + Ley 21.668 (continuidad del cuidado) + **art. 16 bis Ley 21.719** — tratamiento de datos de salud **sin consentimiento** cuando es indispensable para salvaguardar la **vida o integridad** del titular (letra a), informar al cesar el impedimento) o para **prestación de asistencia sanitaria** (letra e). Texto literal y desarrollo en `04_legal.md` §2.3.2.
 
 #### Sacrificio (Trade-off)
 
@@ -342,7 +343,7 @@ Introduce una excepción controlada a la seguridad. Requiere obligatoriamente me
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 EMPI / MPI, Record Locator Service, PIXm / PDQm (IHE), patrón Adapter / Ports & Adapters, HMAC, NID MINSAL, dependencia de calendario vs. contrato.
 
@@ -376,7 +377,7 @@ Hay que mantener (y luego retirar) el adaptador temporal con disciplina: no deja
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Patrones de resiliencia en microservicios y sistemas distribuidos (Circuit Breaker, Retries, Bulkhead pattern, Fallback, Timeout handling).
 
@@ -409,7 +410,7 @@ Requiere una calibración precisa de los umbrales (tiempos de espera, porcentaje
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Estrategias de rendimiento y latencia (Caching, TTL), Edge caching, invalidación de caché.
 
@@ -441,7 +442,7 @@ Introduce el riesgo crítico de servir datos médicos obsoletos (ej. una alergia
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Conceptos de HA, Redundancia, Multi-region architecture, Single Point of Failure (SPOF), Replicación Activa-Activa.
 
@@ -473,7 +474,7 @@ Eleva exponencialmente los costos (CapEx/OpEx) y la complejidad técnica. Aún c
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Computación Offline-first, Estructuras de datos binarias (Protobuf memory footprint), Firmas digitales asimétricas (PKI), Capacidades NFC (NTAG216).
 
@@ -498,7 +499,7 @@ Doble zona NDEF: zona pública en **texto plano** (lectura nativa por cualquier 
 
 La zona pública expone intencionalmente la condición del paciente (consentimiento explícito). El chip puede quedar desactualizado; el semáforo 🟢🟡🔴 mitiga percepción, no elimina el riesgo. Quien no tiene celular/internet/contacto clínico queda fuera de la autogestión — el sistema hace *fallback* al protocolo de trauma; el chip es acelerador, no bloqueador.
 
-**Regulatorio (comisión):** Si preguntan si el TPIM o la App de Primeros Respondedores son dispositivo médico / SaMD regulado por el ISP, ver **§18** y `04_legal.md` §2.6.
+Ante la duda de si el TPIM o la App de Primeros Respondedores son dispositivo médico / SaMD regulado por el ISP, ver **§18** y `04_legal.md` §2.6.
 
 ---
 
@@ -508,7 +509,7 @@ La zona pública expone intencionalmente la condición del paciente (consentimie
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Plugin architectures, contratos de interfaz, certificación de terceros, modelos CSI/CNI (Kubernetes), vendor-maintained adapters.
 
@@ -540,7 +541,7 @@ Exige gobernanza de certificación, versionado de la interfaz y soporte a provee
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Scope creep, gobernanza clínica, International Patient Summary (IPS), separación de concerns clínico-técnicos.
 
@@ -572,7 +573,7 @@ Algunos clínicos querrán más campos "por si acaso". La gobernanza del comité
 
 
 
-#### Conceptos a Estudiar
+#### Conceptos
 
 Software as a Medical Device (SaMD), dispositivos médicos (ISP Chile), IEC 62304, ISO 14971, infraestructura de información en salud (SIH), registro sanitario.
 
@@ -600,7 +601,7 @@ La clasificación regulatoria **no está resuelta** al corte jul 2026. La MIMF s
 | TPIM (zona privada clínica) | Posible **dispositivo médico** si se comercializa como producto sanitario | IEC 62304 + ISO 14971 |
 
 
-**Respuesta rápida para comisión:** *"No lo declaramos resuelto. El RVN actúa como **alerta de urgencia**, no como prescripción autónoma; Break-Glass está acotado y auditado. Diseñamos con trazabilidad requisitos→tests por si el ISP clasifica App o TPIM como regulados, pero **consulta formal ISP** es pendiente antes de comercialización o despliegue masivo — igual que el reglamento 21.668."*
+*"**No lo declaramos resuelto**. El RVN actúa como **alerta de urgencia**, no como prescripción autónoma; Break-Glass está acotado y auditado. Diseñamos con trazabilidad requisitos→tests por si el ISP clasifica App o TPIM como regulados, pero **consulta formal ISP** es pendiente antes de comercialización o despliegue masivo — igual que el reglamento 21.668."*
 
 Marco legal completo: `04_legal.md` §2.6 · Estándares: `05_estandares.md` §4.
 

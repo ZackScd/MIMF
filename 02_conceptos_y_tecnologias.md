@@ -19,9 +19,9 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Rama / Concepto:** Arquitectura de Sistemas Distribuidos.
 *   **¿Qué es?:** El 99% de la información (historia profunda) vive federada en los nodos locales. Sin embargo, existe un "Resumen Vital Nacional" (RVN - Alergias y Diagnósticos Críticos) que se aloja en un repositorio central.
 *   **Profundización:** Se distribuye la carga pesada (imágenes, evoluciones diarias) manteniendo al hospital como "fuente de verdad". Se centraliza estrictamente el enrutamiento (Índice) y la urgencia (RVN). El RVN no pretende ser una ficha nacional: es un **recordatorio clínico de urgencia** (alergias, medicamentos críticos, grupo sanguíneo, diagnósticos vitales) más una señal de que existe historial profundo en otros nodos. El contenido del RVN es regido por un comité nacional clínico-técnico (MINSAL y Colegios Profesionales) que aprueba y publica nuevas versiones del esquema anualmente bajo estrictos criterios de evidencia médica. Si el centro cae, los hospitales operan en "Modo Degradado".
-*   **Justificación:** Evita el costo inasumible de centralizar petabytes de datos legados, pero asegura disponibilidad inmediata de información crítica en urgencias. Enmarcar el RVN como alerta (y no como competencia del EHR) es la principal defensa contra el *scope creep* político de especialidades que quieran "meterse" al resumen central.
+*   **Justificación:** Evita el costo inasumible de centralizar petabytes de datos legacy, pero asegura disponibilidad inmediata de información crítica en urgencias. Enmarcar el RVN como alerta (y no como competencia del EHR) es la principal defensa contra el *scope creep* político de especialidades que quieran "meterse" al resumen central (Por ejemplo, un medico queriendo registrar un cuadro de colon irritable).
 *   **Alternativas descartadas:**
-    *   *Nube Centralizada Nacional (Migración Total):* Descartada por el alto costo de migración, resistencia institucional, y complejidad de mantener un modelo de datos único frente a sistemas heterogéneos.
+    *   *Nube Centralizada Nacional (Migración Total):* Descartada por el alto costo de migración, resistencia institucional, problemas legales, y complejidad de mantener un modelo de datos único frente a sistemas heterogéneos.
 
 ### B) Patrón Sidecar (Como Appliance / Caja Negra)
 
@@ -56,6 +56,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **¿Qué es?:** El Token Físico de Identidad Médica (TPIM). Un chip NFC (NTAG216) portado por el paciente que actúa como el "nodo" más pequeño y externo de la red.
 *   **Profundización:** **Doble Registro NDEF.** Registro 1 (público): **texto plano NDEF**, pensado para lectura **nativa** por cualquier smartphone con NFC (iOS/Android muestran el contenido sin instalar app ni tener internet). No es una “app de civiles”: es una decisión de formato. Registro 2 (privado): Protobuf con subconjunto ultracrítico del RVN (alergias severas, grupo sanguíneo, etc.), firmado por el RVN. Emisión institucional (CESFAM/Clave Única). **Tres canales de escritura del chip:** (A) **prioridad** — actualización en mesón/Sidecar tras contacto clínico; (B) **App Paciente / Autogestión** (Clave Única) — el titular descarga el payload firmado del RVN y lo escribe con el NFC de su celular (cubre rural/teleconsulta con poca visita presencial); (C) kioscos CESFAM/farmacias (complemento). La App de Primeros Respondedores lee la fecha del chip y aplica semáforo de frescura (🟢 < 30 días, 🟡 30-90 días, 🔴 > 90 días).
 *   **Justificación:** Cubre civil (NDEF nativo, cero fricción) y profesional (app con ABAC). La App Paciente no mezcla modelos de confianza con el transeúnte: solo el dueño autenticado escribe. El residuo (sin celular, sin internet, sin contacto) queda cubierto por el anti-objetivo de *fallback* a trauma estándar — límite honesto, no magia.
+La desición de lectura nativa sin existencia de app para civiles (Lectura de la zona pública del chip) está justificada por el hecho de que no todos los ciudadanos instalaría una app que es poco probable que usen. Reduce la fricción y permite la asistencia médica inmediata de transeuntes, evitando problemas de tiempo de descarga / actualización de apps. 
 
 ---
 
@@ -172,7 +173,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 
 *   **Rama / Concepto:** Ciberseguridad / Gestión de Emergencias Críticas.
 *   **¿Qué es?:** Mecanismo para saltar el control ABAC exclusivamente en riesgo vital.
-*   **Controles de Uso:** Solo personal médico autorizado puede activarlo, tiene un límite de tiempo activo (ej. 4 horas), exige ingresar un motivo justificado en la interfaz, y genera automáticamente un ticket de auditoría para revisión del comité de ética.
+*   **Controles de Uso:** Solo personal de salud autorizado puede activarlo, tiene un límite de tiempo activo (ej. 3 horas), exige ingresar un motivo justificado en la interfaz (o permitiendo la sesión, pero bloqueando un nuevo acceso hasta que se ingrese una justificación, en caso de que la emergencia en cuestión requiera atención inmediata y no haya tiempo de rellenar el campo), y genera automáticamente un ticket de auditoría para revisión del comité de ética.
 *   **Justificación:** Un sistema rígido es peligroso. El Break-Glass es necesario, pero sin estos controles estrictos se convierte en una brecha de seguridad.
 
 ### C) Log de Auditoría Append-Only Inmutable
@@ -240,7 +241,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **ABAC (Attribute-Based Access Control):** Control de acceso dinámico basado en atributos y contexto (ej. turno del médico, relación con el paciente), superior al clásico rol estático.
 *   **API REST:** Interfaz HTTP + JSON/XML. Obligatoria hacia componentes MINSAL (EMPI, HPD, terminología) bajo FHIR R4. En la malla interna del camino crítico de urgencia se descarta a favor de gRPC; REST hacia el Estado corre en background o solo en *cache-miss*.
 *   **App Paciente / Autogestión:** App oficial con Clave Única. Actualiza el TPIM del titular (payload firmado del RVN vía NFC del celular) y configura/consiente la zona pública. No es app de transeúntes.
-*   **App de Primeros Respondedores:** App oficial SAMU/Bomberos. Lee zona privada del TPIM con ABAC y Break-Glass. Clasificación ISP/SaMD **pendiente** — ver `03_guia_defensa_arquitectura.md` §18.
+*   **App de Primeros Respondedores:** App oficial SAMU/Bomberos. Lee zona privada del TPIM con ABAC y Break-Glass. Clasificación ISP/SaMD **pendiente** — ver `03_justificacion_de_desiciones.md` §18.
 *   **Appliance:** Dispositivo o software preconfigurado (como el Sidecar) que se despliega "llave en mano" y es gestionado centralizadamente sin que el cliente local lo modifique.
 *   **Backpressure / Rate Limiting:** Mecanismo de control de flujo que limita la cantidad de peticiones concurrentes para evitar que un sistema legacy colapse por sobrecarga.
 *   **Break-Glass ("Romper el cristal"):** Protocolo de seguridad que permite saltar controles de acceso (ABAC) en casos de riesgo vital, dejando una estricta traza de auditoría.
@@ -287,7 +288,7 @@ Este documento justifica las decisiones arquitectónicas de la MIMF, separando l
 *   **Soft Merge (Datos Reconciliados):** Enfoque que muestra versiones conflictivas de un diagnóstico (con fechas y orígenes) para que el médico decida, sin borrar registros ajenos.
 *   **SPOF (Single Point of Failure):** Punto Único de Fallo. Componente que, de caer, apaga toda la red. La MIMF lo evita replicando el Índice y usando cachés de emergencia.
 *   **TLS 1.3:** Protocolo criptográfico de transporte que cifra de manera robusta los datos médicos mientras viajan por internet ("cifrado en tránsito").
-*   **TPIM (Token Físico de Identidad Médica):** Componente NFC de la MIMF portado por el paciente. Almacena offline un resumen vital codificado en Protobuf para emergencias de primeros respondedores. Posible dispositivo médico ante ISP — ver `03_guia_defensa_arquitectura.md` §18.
+*   **TPIM (Token Físico de Identidad Médica):** Componente NFC de la MIMF portado por el paciente. Almacena offline un resumen vital codificado en Protobuf para emergencias de primeros respondedores. Posible dispositivo médico ante ISP — ver `03_justificacion_de_desiciones.md` §18.
 *   **TTL (Time To Live):** Tiempo de vida útil de un dato almacenado en el caché antes de forzar al sistema a ir a buscar la versión más nueva al hospital de origen (o a revalidar una resolución EMPI cacheada).
 *   **Vendor Lock-in (Cautividad):** Cuando una empresa o Estado queda atrapado con un solo proveedor de software porque el costo y formato de extracción de datos hace inviable migrar.
 *   **WORM (Write Once, Read Many) / Log Inmutable:** Base de datos de auditoría temporal donde los accesos se registran como bloques añadidos al final, impidiendo alteraciones forenses.

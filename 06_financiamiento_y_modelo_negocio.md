@@ -4,11 +4,11 @@
 
 ---
 
-## 0. Nota de alcance sobre el "Informe de Evaluación de Proyectos" (ATEP01, 16-jun-2026)
+## 0. Nota de alcance sobre el "Informe de Evaluación de Proyectos" (ATEP01, 16-jun-2026): Obsoleto/Rechazado.
 
-El informe de Evaluación de Proyectos entregado para el ramo ATEP01 evaluó un producto derivado denominado **VitalTag**: un servicio de identificación clínica de emergencia de adhesión voluntaria (opt-in), desacoplado de la arquitectura hospitalaria (sin Sidecar, sin RVN, sin EMPI, sin ABAC), monetizado mediante venta de etiquetas NFC, suscripción individual "premium" y convenios B2B.
+El informe de Evaluación de Proyectos entregado para el ramo ATEP01 evaluó un el producto **VitalTag**: un servicio de identificación clínica de emergencia de adhesión voluntaria (opt-in), desacoplado de la arquitectura hospitalaria (sin Sidecar, sin RVN, sin EMPI, sin ABAC), monetizado mediante venta de etiquetas NFC, suscripción individual "premium" y convenios B2B.
 
-Ese documento fue un ejercicio de evaluación financiera del ramo, no una decisión de arquitectura del proyecto. **Este documento reemplaza esa dirección.** El modelo de negocio de MIMF se construye sobre la arquitectura ya definida en `01`–`05` (Sidecar, RVN, TPIM, EMPI/`PatientIdentityProvider`, ABAC), y sostiene el anti-objetivo ya establecido en `01_proyecto.md`:
+Se trató de un ejercicio de evaluación financiera para el ramo, no una decisión de arquitectura del proyecto. **Este documento reemplaza esa dirección.** El modelo de negocio de MIMF se construye sobre la arquitectura ya definida en `01`–`05` (Sidecar, RVN, TPIM, EMPI/`PatientIdentityProvider`, ABAC), y sostiene el anti-objetivo ya establecido en `01_proyecto.md`:
 
 > *"El sistema no condiciona la atención a la tenencia del chip ni del RUT."*
 
@@ -16,7 +16,7 @@ Ningún escenario descrito abajo contempla cobrar al paciente ni al profesional 
 
 ### 0.1. Modelo VitalTag (informe ATEP01) — desglose de las tres fuentes y traslado a MIMF
 
-El informe de evaluación financiera del ramo (16-jun-2026) proyectó **tres fuentes de ingreso** a cinco años para el producto **VitalTag** (etiqueta NFC opt-in, sin arquitectura hospitalaria). Las cifras del informe y su compatibilidad con MIMF:
+El informe de evaluación financiera del ramo proyectó **tres fuentes de ingreso** a cinco años para el producto **VitalTag** (etiqueta NFC opt-in, sin arquitectura hospitalaria). Las cifras del informe y su compatibilidad con MIMF:
 
 | # | Fuente VitalTag (informe) | Cifras / alcance en el informe | ¿Compatible con MIMF? | Traslado en este documento |
 | - | ------------------------- | ------------------------------ | --------------------- | -------------------------- |
@@ -24,7 +24,9 @@ El informe de evaluación financiera del ramo (16-jun-2026) proyectó **tres fue
 | 2 | **Suscripción Premium (SaaS B2C)** | Plan anual **$19.900**: perfiles familiares, almacenamiento de documentos médicos y soporte prioritario sobre capa básica gratuita. | **No** sobre funciones clínicas. “Almacenamiento de documentos médicos” y acceso ampliado a información de salud del titular chocan con **entrega gratuita** de la ficha (Ley 20.584 art. 13) y con **acceso/portabilidad** gratuitos al menos trimestralmente (Ley 21.719 arts. 9–10). Un freemium donde lo de pago es “más salud” recrea pacientes de primera y segunda categoría. | **Excluido** — ver §2.1.1. Lo único trasladable del concepto “premium” es **soporte prioritario institucional** (SLA B2B al hospital), no al ciudadano. |
 | 3 | **Convenios institucionales (B2B)** | Paquetes para clínicas, colegios, municipios y empresas que adoptan el sistema para sus comunidades. | **Sí** — es el núcleo del **Escenario B** de este documento: el pagador es la organización, no cada persona. Alineado a Sidecar por hospital, certificación de conectores, malla gestionada para Isapres/redes y convenios con Servicios de Salud. | Tabla §2.2 (Nodo Sidecar, certificación, malla privada, SLA). Esta es la vía para “sacarle plata a las empresas” sin cobrar al paciente. |
 
-**Síntesis para alinear al equipo:** del modelo VitalTag del informe ramo, MIMF **rescata solo el tercer pilar (B2B)** y lo ancla a la arquitectura real (`01`–`05`). Los pilares 1 (retail NFC) y 2 (premium ciudadano) sirvieron para la evaluación financiera de un producto distinto; **no** se trasladan al TPIM/RVN/App Paciente de MIMF sin violar diseño y marco legal (§2.1.1). El Escenario A (Estado) sigue siendo la apuesta principal; el B institucional es el respaldo comercial compatible.
+**Síntesis:** del modelo VitalTag del informe, MIMF rescata **solo el tercer pilar (B2B)** y lo ancla a la arquitectura real (`01`–`05`). Los pilares 1 (retail NFC) y 2 (premium ciudadano) **NO** se trasladan al TPIM/RVN/App Paciente de MIMF sin violar diseño y marco legal (§2.1.1). El Escenario A (Estado) sigue siendo la apuesta principal; el B institucional es el respaldo comercial compatible.
+
+**En consideración:** Desarrollo de un plan híbrido; Piloto como empresa privada y posterior licitación para compra estatal. 
 
 ---
 
@@ -68,7 +70,7 @@ La Ley N.º 21.668, que modifica el art. 13 de la Ley 20.584 para establecer la 
 
 ---
 
-## 2. Escenario B — SaaS Institucional (respaldo)
+## 2. Escenario B — SaaS Institucional (respaldo - mayor probabilidad de éxito)
 
 ### 2.1. Principio de diseño
 
@@ -78,9 +80,9 @@ El sujeto de pago es la institución (hospital, clínica, Isapre, proveedor de E
 
 ### 2.1.1. Nota legal — por qué no cobrar al paciente (ni plan premium ciudadano)
 
-> **Aviso:** síntesis de normativa pública para sustentar decisiones de diseño y negocio. No reemplaza asesoría legal. Desarrollo normativo ampliado en `04_legal.md`.
+> **Aviso:** síntesis de normativa pública para sustentar decisiones de diseño y negocio. No reemplaza asesoría legal. Desarrollo normativo ampliado en `04_legal.md`, fecha de corte: julio 2026.
 
-Un modelo *freemium* o *premium* B2C — capa gratuita limitada + pago del titular por “más datos”, actualización prioritaria del TPIM, RVN ampliado o funciones de la App Paciente — no es solo una preferencia de producto: **entra en tensión directa** con obligaciones que ya pesan sobre prestadores y, desde el 1-dic-2026, sobre cualquier responsable de tratamiento de datos de salud.
+Un modelo *freemium* o *premium* B2C — capa gratuita limitada + pago del titular por “más datos”, actualización prioritaria del TPIM, RVN ampliado o funciones de la App Paciente — no es solo una preferencia de producto: **entra en tensión directa** con obligaciones que ya pesan sobre prestadores y, bajo la vigencia de la Ley 21.719, sobre cualquier responsable de tratamiento de datos de salud.
 
 
 | Fundamento                               | Qué dice la norma                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Por qué importa para MIMF (Escenario B)                                                                                                                                                                                                                                     |
@@ -101,7 +103,7 @@ Un modelo *freemium* o *premium* B2C — capa gratuita limitada + pago del titul
 - **Hosting y SLA** para Isapres o redes privadas.
 - **Analítica y reportería administrativa** para la gerencia hospitalaria (nunca RVN completo, Break-Glass, ni lectura clínica vital del TPIM tras paywall).
 
-**Respuesta corta para alinear al equipo:** el Escenario B **sí saca plata de las empresas** (instituciones y proveedores); lo que la ley chilena no respalda — y el diseño MIMF rechaza — es cobrarle al ciudadano por acceder a su propia información clínica o por una capa “premium” de continuidad/urgencia que la ley ya obliga a garantizar de otra forma.
+**Alineación:** el Escenario B **sí saca plata de las empresas** (instituciones y proveedores); lo que la ley chilena no respalda — y el diseño MIMF rechaza — es cobrarle al ciudadano por acceder a su propia información clínica o por una capa “premium” de continuidad/urgencia que la ley ya obliga a garantizar de otra forma.
 
 **Referencias:**
 
@@ -148,7 +150,7 @@ Un modelo *freemium* o *premium* B2C — capa gratuita limitada + pago del titul
 
 Mientras el proyecto no esté constituido como persona jurídica, cualquier actividad conjunta de los integrantes puede entenderse, en términos generales del derecho societario chileno, como una **sociedad de hecho**: cada integrante responde personal, ilimitada y solidariamente por las obligaciones derivadas de la actividad, sin el beneficio de responsabilidad limitada que sí ofrecen las estructuras formales ([Edig — efectos personales del socio](https://edig.cl/2020/12/02/efectos-personales-socio-de-una-sociedad/)).
 
-**Nota:** esto es información general de derecho societario chileno, no asesoría legal para este caso específico. Antes de operar con datos reales de pacientes, se recomienda consulta con un abogado para definir la estructura y el momento exacto de constitución.
+**Nota:** Obligatoria la consulta a un abogado antes de realizar cualquier acción.
 
 ### 3.2. Qué resuelve constituir una sociedad (SpA) antes de operar con datos reales
 
@@ -175,12 +177,12 @@ Renunciar a la responsabilidad societaria y ceder la titularidad patrimonial del
 - **Derecho patrimonial:** puede cederse, venderse o transferirse (es lo que se transa en los Escenarios A, B, C y D de este documento).
 - **Derecho moral (art. 14):** incluye el **derecho de paternidad** — reivindicar la autoría de la obra asociando el propio nombre a ella — y es personal, vitalicio e **irrenunciable**: *"es nulo cualquier pacto en contrario"*. Este derecho no se pierde al ceder acciones, renunciar a un cargo, ni al vender la propiedad intelectual a un tercero o al Estado.
 
-En términos prácticos: sí es posible seguir refiriéndose a sí mismo como arquitecto del sistema en un CV o portafolio después de desvincularse, incluso si el proyecto pasa a manos del Estado o de un comprador privado. Dos matices a considerar, distintos del derecho de autoría en sí:
+En términos prácticos: es posible seguir refiriéndose a sí mismo como arquitecto del sistema en un CV o portafolio después de desvincularse, incluso si el proyecto pasa a manos del Estado o de un comprador privado. Dos matices a considerar, distintos del derecho de autoría en sí:
 
-1. **Tiempo verbal y alcance de la afirmación:** describir el rol en pasado y ligado al período de participación real ("diseñé la arquitectura de interoperabilidad del sistema X entre [fecha] y [fecha]"), no como afiliación o responsabilidad vigente — para no generar una representación incorrecta de involucramiento actual una vez fuera del proyecto.
+1. **Tiempo verbal y alcance de la afirmación:** describir el rol en pasado y ligado al período de participación real ("diseñé la arquitectura de interoperabilidad del sistema X entre [fecha] y [fecha]"), no como afiliación o responsabilidad vigente.
 2. **Confidencialidad de detalles operativos:** si al momento de la transferencia (Escenario A o D) o de un contrato B2B (Escenario B) se firma un acuerdo de confidencialidad, este puede restringir la divulgación de detalles específicos de implementación, clientes o cifras — pero no la autoría general del diseño. Se recomienda, al negociar cualquier contrato de transferencia o venta, incluir explícitamente una cláusula de atribución/portafolio que confirme por escrito el derecho a referenciar el rol desempeñado, para evitar ambigüedad futura con la contraparte.
 
-**Nota:** esto es información general sobre el régimen de derecho de autor chileno, no asesoría legal específica; conviene confirmar con un abogado la redacción exacta de cualquier cláusula de confidencialidad antes de firmarla.
+**Nota:** esto es información general sobre el régimen de derecho de autor chileno; conviene confirmar con un abogado la redacción exacta de cualquier cláusula de confidencialidad antes de firmarla.
 
 ---
 
@@ -200,7 +202,7 @@ Si no hay comprador (estatal ni privado) al momento de que todos los socios deci
 
 ---
 
-## 5. Marco de responsabilidad y multas (por qué la exposición es real, no retórica)
+## 5. Marco de responsabilidad y multas
 
 Dos cuerpos legales concentran el riesgo económico de operar MIMF como infraestructura crítica en salud, ambos con potestad sancionatoria administrativa activa a julio de 2026:
 

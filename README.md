@@ -4,6 +4,8 @@ Repo del proyecto de arquitectura para interoperabilidad clínica en Chile.
 
 La idea de fondo es simple (y un poco obvia cuando la miras de cerca): **Chile no necesita un EHR nacional único**. Necesita una capa que conecte lo que ya existe, sin romper hospitales, sin centralizar petabytes de historia clínica, y sin dejar a un paramédico a ciegas en la carretera cuando no hay señal.
 
+Actualmente, todo es documentación teórica a modo de Tesis. 
+
 MIMF propone una arquitectura **híbrida federada**, alineada a la [Arquitectura Nacional de Interoperabilidad del MINSAL](https://interoperabilidad.minsal.cl/):
 
 - el historial profundo se queda en el hospital de origen (soberanía del dato)
@@ -12,9 +14,8 @@ MIMF propone una arquitectura **híbrida federada**, alineada a la [Arquitectura
 - un **RVN** (Resumen Vital Nacional) entrega lo crítico en urgencias
 - **Sidecars** perimetrales traducen sistemas legacy a FHIR sin tocar el código del proveedor
 - un **TPIM** (chip NFC) cubre el escenario offline pre-hospitalario
-- **2 apps oficiales:** Primeros Respondedores + Paciente/Autogestión; la zona pública del chip la lee cualquier celular NFC (NDEF), sin app de civiles
+- **2 apps oficiales:** Primeros Respondedores (SAMU/BOMBEROS) + Paciente/Autogestión; la zona pública del chip la lee cualquier celular NFC (NDEF), sin app de civiles
 
-Para leer esta wea, empieza por `01_proyecto.md` y después baja a `02` / `03` cuando te pidan justificar decisiones.
 
 ---
 
@@ -25,10 +26,10 @@ Para leer esta wea, empieza por `01_proyecto.md` y después baja a `02` / `03` c
 | [`00_investigacion.md`](00_investigacion.md) | Contexto: historia de interoperabilidad en Chile (SIDRA, Hospital Digital), causas del fracaso, casos internacionales (Israel, Estonia/X-Road), Ley 21.668, alineación con MINSAL y cómo se posiciona MIMF frente a la tendencia estatal. |
 | [`01_proyecto.md`](01_proyecto.md) | La propuesta propiamente tal. Tesis, anti-objetivos, componentes, flujos clínicos (urgencia + NFC), seguridad, operación y gobernanza. Es el documento "ejecutivo" del proyecto. |
 | [`02_conceptos_y_tecnologias.md`](02_conceptos_y_tecnologias.md) | Justificación técnica profunda. Qué es cada pieza, por qué se eligió, qué se descartó, stack sugerido para PoC y glosario. |
-| [`03_guia_defensa_arquitectura.md`](03_guia_defensa_arquitectura.md) | Manual de defensa. Cada decisión con el formato: problema → alternativas → beneficios → trade-off. Útil para comisiones, ramos y cuando alguien diga "¿y por qué no REST?". |
+| [`03_justificacion_de_desiciones.md`](03_justificacion_de_desiciones.md) | Manual de defensa. Cada decisión con el formato: problema → alternativas → beneficios → trade-off. Útil para comisiones, ramos y cuando alguien diga "¿y por qué no REST?". |
 | [`04_legal.md`](04_legal.md) | Marco legal y normativo: leyes (21.668, 20.584, 19.628/21.719, 21.663), ecosistema MINSAL (EMPI, HPD, NID, FHIR, TEI, SNRE), proyectos asociados y matriz de cumplimiento MIMF. |
 | [`05_estandares.md`](05_estandares.md) | Estándares técnicos: ISO/IEC (27001, 27701, 25010, 12207…), NCh, OWASP, IEC 62304, calidad de software y matriz por componente MIMF. Complementa `04` (ley) y `02` (FHIR/gRPC). |
-| [`Informes/`](Informes/) | Informes académicos presentados en la universidad (entregas, evaluaciones, retroalimentaciones). No son la arquitectura "viva"; son evidencia de proceso del ramo. |
+| [`Informes/`](Informes/) | Informes académicos presentados en la universidad (entregas, evaluaciones, retroalimentaciones). No son la arquitectura "viva"; son evidencia de proceso del proyecto. |
 | `README.md` | Este archivo. |
 
 ---
@@ -38,7 +39,7 @@ Para leer esta wea, empieza por `01_proyecto.md` y después baja a `02` / `03` c
 1. `00_investigacion.md` — para entender *por qué* el problema existe
 2. `01_proyecto.md` — para entender *qué* propone MIMF
 3. `02_conceptos_y_tecnologias.md` — para el *cómo* y el *por qué técnico*
-4. `03_guia_defensa_arquitectura.md` — para sobrevivir preguntas difíciles
+4. `03_justificacion_de_desiciones.md` — para sobrevivir preguntas difíciles
 5. `04_legal.md` — para el marco legal, MINSAL y cómo MIMF cumple o se acopla
 6. `05_estandares.md` — para ISO, OWASP, calidad SW y certificación técnica
 
@@ -54,7 +55,7 @@ La arquitectura base no se reescribió: se **cerraron huecos operativos** y se a
 
 **Por qué:** Un ejecutable con Oracle + SAP + InterSystems + SQL Server + Visual Basic arrastra módulos fantasma, más RAM, más superficie de ataque y testing imposible. Compilar por hospital es más realista en servidores viejos y reduce bugs irrelevantes.
 
-**Dónde:** `01_proyecto.md`, `02_conceptos_y_tecnologias.md` (sección Sidecar), `03_guia_defensa_arquitectura.md` (§2), `00_investigacion.md` (tabla comparativa).
+**Dónde:** `01_proyecto.md`, `02_conceptos_y_tecnologias.md` (sección Sidecar), `03_justificacion_de_desiciones.md` (§2), `00_investigacion.md` (tabla comparativa).
 
 ---
 
@@ -205,7 +206,12 @@ Se descartó UUID/HMAC(RUT) como maestro de identidad. HMAC, si se usa, solo pse
 
 Si van a editar docs:
 
-- mantengan el tono técnico y el formato de listas / secciones que ya usan `00`–`05`
+- mantengan el tono técnico y el formato de listas / secciones que ya usan `00`–`06`
 - en `03`, cualquier decisión nueva debería caber en el molde **problema → alternativas → beneficios → trade-off**
 
-Pendiente razonable a futuro: un **Runbook Nacional** con escenarios operativos a 10 años (ransomware, rotación PKI, hospital offline 72h, terremoto regional, etc.).
+Pendiente razonable a futuro: 
+
+**Roadmap** comenzando desde el piloto / prototipo universitario. **SIN** datos reales de pacientes, alcance limitado (Idealmente, comenzar unicamente con el software de traducción semántica y transmisión/recepción de datos -> dejar fuera apps moviles y TPIM del prototipo inicial.)
+
+**Runbook Nacional** con escenarios operativos a 10 años (ransomware, rotación PKI, hospital offline 72h, terremoto regional, etc.).
+

@@ -68,7 +68,7 @@ En paralelo, el MINSAL define la **Arquitectura Nacional de Interoperabilidad** 
 | Principio legal | Mecanismo MIMF |
 | --------------- | -------------- |
 | Acceso solo a quien atiende directamente | **ABAC** contextual (turno, admisión, relación activa con el paciente); deny-by-default |
-| Emergencia con paciente inconsciente | **Break-Glass** con justificación, ventana temporal y **auditoría inmutable** |
+| Emergencia con paciente inconsciente | TPIM Offline, **Break-Glass** con justificación, ventana temporal y **auditoría inmutable** |
 | Confidencialidad / dato reservado | Cifrado TLS 1.3 en tránsito; cifrado en reposo en cachés; pseudonimización opcional del locator (HMAC + KMS) |
 | Derecho del paciente sobre su información | **App Paciente / Autogestión** (Clave Única): actualización TPIM, configuración zona pública con **consentimiento explícito** |
 | Conservación en hospital origen | Historial profundo permanece en el EHR del prestador; MIMF no centraliza petabytes |
@@ -108,7 +108,7 @@ Chile tiene **dos capas** en el mismo cuerpo legal (19.628, reescrita por 21.719
 
 ---
 
-#### 2.3.2. Ley N.º 21.719 — Protección de datos personales (vigencia plena 1-dic-2026)
+#### 2.3.2. Ley N.º 21.719 — Protección de datos personales (vigencia plena 1-dic-2026, Posible postergación)
 
 **Qué es:** Publicada el [13 de diciembre de 2024](https://www.diariooficial.interior.gob.cl/publicaciones/2024/12/13/44023/01/2583630.pdf). **No deroga** la 19.628: la **reescribe** y crea la **Agencia de Protección de Datos Personales (APDP)** como autoridad fiscalizadora. Alinea el marco chileno a estándares internacionales (RGPD, LGPD).
 
@@ -116,7 +116,7 @@ Chile tiene **dos capas** en el mismo cuerpo legal (19.628, reescrita por 21.719
 
 | Tema | Qué establece | Implicancia MIMF |
 | ---- | ------------- | ---------------- |
-| **Vigencia** | Plena desde **1-dic-2026** | Piloto y diseño deben converger antes de esa fecha |
+| **Vigencia** | Plena desde **1-dic-2026** (en evaluación de postergación, ago-2026 — ver §2.3.3) | De preferencia, piloto y diseño deben converger antes de esa fecha |
 | **APDP** | Fiscalización, instrucciones, política de datos | Operador de la malla (Estado/concesión) sujeto a fiscalización |
 | **Derechos del titular** | **ARCOP** ampliados + **Bloqueo** (art. 7° y ss.) | App Paciente / portal deben soportar acceso, rectificación, cancelación, oposición, portabilidad y bloqueo |
 | **Datos sensibles de salud** | Art. **16 bis**: tratamiento solo para fines de leyes sanitarias; excepciones sin consentimiento acotadas | Break-Glass, urgencia, RVN y TPIM deben documentar base legal y finalidad |
@@ -126,7 +126,7 @@ Chile tiene **dos capas** en el mismo cuerpo legal (19.628, reescrita por 21.719
 | **Sanciones** | Multas hasta **20.000 UTM** | Refuerza costo de acceso indebido o filtración masiva |
 | **Encargado / responsable** | Roles definidos (responsable vs. encargado del tratamiento) | Sidecar/hospital = responsable local del EHR; operador Hub/Índice/RVN = responsable o encargado según contrato estatal |
 
-**Art. 16 bis — Datos de salud (texto útil para comisiones):**
+**Art. 16 bis — Datos de salud:**
 
 Tratamiento de datos sensibles de salud **sin consentimiento** permitido, entre otros, cuando:
 
@@ -151,7 +151,7 @@ Tratamiento de datos sensibles de salud **sin consentimiento** permitido, entre 
 | Notificación de incidentes | Alineable a Ley 21.663 (CSIRT) + futuras instrucciones APDP |
 | Evitar tratamiento innecesario | ABAC deny-by-default; lazy loading del historial profundo |
 
-**Lo que la MIMF debe cerrar antes del 1-dic-2026 (operativo, no solo arquitectura):**
+**Lo que la MIMF debe cerrar antes de la entrada en vigencia de Ley 21.719 (operativo, no solo arquitectura):**
 
 1. Política de privacidad y registro de actividades de tratamiento (RAT) por componente (Sidecar, Índice, RVN, TPIM, apps).
 2. Procedimiento de ejercicio de derechos ARCOP+Bloqueo vía App Paciente y mesón hospitalario.
@@ -160,6 +160,31 @@ Tratamiento de datos sensibles de salud **sin consentimiento** permitido, entre 
 5. Evaluación de impacto en protección de datos (EIPD) para RVN central y TPIM, si la APDP lo exige por volumen/riesgo.
 
 **Referencia:** [Ley 21.719 — BCN balance legislativo](https://www.bcn.cl/balance-legislativo/detalle/ficha_LEY_21719_2024-12-13), [publicación D.O. 13-dic-2024](https://www.diariooficial.interior.gob.cl/publicaciones/2024/12/13/44023/01/2583630.pdf).
+
+---
+
+#### 2.3.3. Nota de seguimiento — postergación de la Ley 21.719 en evaluación (corte: 15-ago-2026)
+
+La entrada en vigencia plena de la Ley 21.719, fijada originalmente para el 1 de diciembre de 2026, está en evaluación de postergación por parte del Ejecutivo. No se trata de una revisión del articulado ni de un retroceso en el contenido de la ley, sino de un problema de instalación institucional: la Agencia de Protección de Datos Personales (APDP), organismo llamado a fiscalizarla, aún no cuenta con Consejo Directivo.
+
+**Cronología del atasco:**
+
+| Fecha | Hito |
+| ----- | ---- |
+| Mayo 2026 | El Senado rechaza la terna de consejeros para la APDP propuesta por el Presidente Kast |
+| Junio 2026 | Vence el plazo legal para nombrar consejeros (fijado en 6 meses previos a la entrada en vigencia) |
+| Agosto 2026 | El biministro de Economía, Daniel Mas, confirma que el Ejecutivo evalúa postergar la vigencia de la ley — o solo la puesta en marcha de la Agencia — por la falta de Consejo Directivo |
+
+**Estado a la fecha (15-ago-2026):** No hay decisión oficial ni modificación formal del plazo. La Asociación Chilena de Profesionales en Protección de Datos Personales (AGPD) solicitó que, de aprobarse una postergación, se acote a un máximo de 6 meses. Mientras no exista un anuncio formal, **rige el calendario vigente: 1 de diciembre de 2026**.
+
+**Lectura para MIMF:** Es el tercer caso documentado en este proyecto del mismo patrón estructural descrito en `00_investigacion.md` §2 (gobernanza inestable / brecha entre mandato legal y capacidad instalada del Estado), junto con el atraso del reglamento del art. 13 (§2.1) y la calificación OIV pendiente bajo Ley 21.663 (§2.4). La MIMF no condiciona su diseño a la fecha exacta de vigencia de la 21.719: aplica el estándar más exigente (ARCOP+Bloqueo, RAT, EIPD, notificación de brechas) con o sin postergación, bajo el mismo principio de acoplarse al contrato normativo y no al calendario administrativo del Estado.
+
+**Fuentes:**
+
+* Campos Molina, A. — "Postergar la Ley de Datos Personales: un síntoma, no una solución", *trendTIC*, 6-ago-2026. https://www.trendtic.cl/2026/08/postergar-la-ley-de-datos-personales-un-sintoma-no-una-solucion/
+* "Gobierno de Chile postergaría implementación de la Ley de Protección de Datos Personales", *SREDevOps*, ago-2026. https://www.sredevops.org/es/gobierno-de-chile-postergaria-implementacion-de-la-ley-de-proteccion-de-datos-personales/
+* AGPD — "Piden acotar a 6 meses la postergación Ley de protección de datos", *ESGHoy*, ago-2026. https://www.esghoy.cl/agpd-postergacion-ley-21719-proteccion-datos-personales/
+
 
 ---
 
@@ -469,7 +494,7 @@ Estos puntos **no están resueltos en ley publicada al corte de este documento**
 
 1. **Reglamento del art. 13 (Código Sanitario / Ley 20.584)** actualizado post-21.668: estándares definitivos, plazos por tipo de prestador, certificación. Plazo legal original: 18 meses desde mayo 2024 (~nov 2025); al corte jul 2026 **sigue sin publicarse** (~8 meses de atraso).
 2. **Madurez operativa EMPI/HPD** en terreno (IGs NID en evolución): la MIMF mitiga con adaptador temporal, no elimina la necesidad de converger.
-3. **Ley 21.719 (vigencia plena 1-dic-2026):** reglamentos e instrucciones APDP; procedimientos operativos MIMF (RAT, ARCOP+Bloqueo, post-Break-Glass, EIPD RVN/TPIM). Hasta el 30-nov-2026 sigue aplicándose la 19.628 en lo vigente.
+3. **Ley 21.719 (vigencia plena 1-dic-2026):** reglamentos e instrucciones APDP; procedimientos operativos MIMF (RAT, ARCOP+Bloqueo, post-Break-Glass, EIPD RVN/TPIM). Hasta el 30-nov-2026 sigue aplicándose la 19.628 en lo vigente. (**Posible Postergación**)
 4. **Calificación de operadores de importancia vital** en salud bajo Ley 21.663: definir si nodos MIMF (Hub, Índice, RVN) quedan en registro OIV y obligaciones CSIRT exactas. La ley ya obliga al sector como servicio esencial; la MIMF diseña bajo NCh-ISO 27001/27799 **sin esperar** la calificación formal de cada nodo (ver §2.4).
 5. **Portal / App ciudadana MINSAL** vs. App Paciente MIMF: delimitar funciones para no duplicar canales oficiales (MIMF como complemento de autogestión TPIM + consulta RVN, sujeto a acuerdo institucional).
 6. **Clasificación ISP (SaMD / dispositivo médico):** determinar si la App de Primeros Respondedores y/o el TPIM requieren registro sanitario antes de despliegue masivo (ver §2.6).
